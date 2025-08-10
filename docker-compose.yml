@@ -1,0 +1,477 @@
+version: '3.8'
+
+services:
+  # Core ProductiveMiner Blockchain Node
+  productiveminer-node:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
+    container_name: productiveminer-node
+    restart: unless-stopped
+    ports:
+      - "8545:8545"  # Blockchain RPC
+      - "8546:8546"  # WebSocket
+      - "30303:30303"  # P2P
+    environment:
+      - NODE_ENV=production
+      - NETWORK_ID=1337
+      - CHAIN_ID=31337
+      - CONSENSUS_TYPE=hybrid  # PoW/PoS/PoR
+      - ENABLE_MINING=true
+      - MATHEMATICAL_ENGINES=9
+      - QUANTUM_SECURITY_LEVEL=256
+      - ADAPTIVE_LEARNING=true
+    volumes:
+      - blockchain-data:/app/data
+      - blockchain-logs:/app/logs
+      - ./blockchain/genesis.json:/app/genesis.json:ro
+      - ./blockchain/config:/app/config:ro
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mathematical Computation Engine
+  mathematical-engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile.engine
+    container_name: mathematical-engine
+    restart: unless-stopped
+    ports:
+      - "5001:5000"  # Engine API
+    environment:
+      - ENGINE_TYPE=multi  # Supports all 9 mathematical types
+      - COMPUTATION_DIFFICULTY=25
+      - MAX_RECORDS=10000
+      - ACCURACY_THRESHOLD=99.5
+      - RESEARCH_VALUE_MULTIPLIER=1.0
+      - ENABLE_PRIME_PATTERN=true
+      - ENABLE_RIEMANN_ZERO=true
+      - ENABLE_YANG_MILLS=true
+      - ENABLE_GOLDBACH=true
+      - ENABLE_NAVIER_STOKES=true
+      - ENABLE_BIRCH_SWINNERTON=true
+      - ENABLE_ECC=true
+      - ENABLE_LATTICE=true
+      - ENABLE_POINCARE=true
+    volumes:
+      - engine-data:/app/data
+      - engine-logs:/app/logs
+      - ./engine:/app:ro
+    depends_on:
+      - productiveminer-node
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API Service
+  productiveminer-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: productiveminer-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Main API
+      - "3001:3001"  # WebSocket
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - WS_PORT=3001
+      - FRONTEND_URL=https://productiveminer.org
+      - DATABASE_URL=postgresql://productiveminer:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/productiveminer_db
+      - REDIS_URL=redis://redis:6379
+      - BLOCKCHAIN_URL=http://productiveminer-node:8545
+      - ENGINE_URL=http://mathematical-engine:5000
+      - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_me}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your_encryption_key_32_bytes_long}
+      # Tokenomics Configuration
+      - TOTAL_SUPPLY=1000000000
+      - CIRCULATING_SUPPLY=500000000
+      - STAKING_APY=0.12
+      - EMISSION_RATE=1000
+      - BURN_RATE=0.1
+      # Mining Configuration
+      - MAX_CONCURRENT_SESSIONS=50
+      - DEFAULT_DIFFICULTY=25
+      - BLOCK_TIME=20
+      - REWARD_MULTIPLIER=1.0
+      # Adaptive Learning
+      - ML_MODELS_COUNT=9
+      - LEARNING_RATE=0.001
+      - TRAINING_CYCLES=1000
+      # Security
+      - QUANTUM_SECURITY_ENABLED=true
+      - ADAPTIVE_SECURITY=true
+      - BIT_SCALING_ENABLED=true
+      # Contract Integration
+      - CONTRACT_RPC_URL=http://productiveminer-contracts:8545
+      - CONTRACT_ADDRESS=
+      - PRIVATE_KEY=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      productiveminer-node:
+        condition: service_healthy
+      mathematical-engine:
+        condition: service_healthy
+    volumes:
+      - backend-data:/app/data
+      - backend-logs:/app/logs
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Application
+  productiveminer-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=
+        - REACT_APP_WS_URL=ws://localhost:3001
+        - REACT_APP_BLOCKCHAIN_URL=/api
+        - REACT_APP_ENGINE_URL=/engine
+        - NODE_ENV=production
+    container_name: productiveminer-frontend
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    environment:
+      - REACT_APP_API_URL=/api
+      - REACT_APP_WS_URL=ws://localhost:3001
+      - REACT_APP_BLOCKCHAIN_URL=/api
+      - REACT_APP_ENGINE_URL=/engine
+      - NODE_ENV=production
+      - REACT_APP_SHOW_MINING_DASHBOARD=true
+      - REACT_APP_SHOW_VALIDATORS=true
+      - REACT_APP_SHOW_DISCOVERIES=true
+      - REACT_APP_SHOW_RESEARCH_REPO=true
+      - REACT_APP_SHOW_TOKENOMICS=true
+    depends_on:
+      - productiveminer-backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - frontend-build:/app/build
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-productiveminer
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=productiveminer
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme123}
+      - POSTGRES_DB=productiveminer_db
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U productiveminer -d productiveminer_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: redis-productiveminer
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Machine Learning Service
+  ml-service:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile.ml
+    container_name: productiveminer-ml
+    restart: unless-stopped
+    ports:
+      - "5002:5000"
+    environment:
+      - SERVICE_TYPE=ml
+      - MODEL_COUNT=9
+      - LEARNING_RATE=0.001
+      - MOMENTUM=0.9
+      - BATCH_SIZE=32
+      - EPOCHS=100
+      - DATABASE_URL=postgresql://productiveminer:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/productiveminer_db
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ml-models:/app/models
+      - ml-data:/app/data
+      - ml-logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - productiveminer-network
+
+  # Research Repository Service
+  research-repo:
+    build:
+      context: ./research
+      dockerfile: Dockerfile
+    container_name: research-repository
+    restart: unless-stopped
+    ports:
+      - "5003:5000"
+    environment:
+      - SERVICE_TYPE=research
+      - DATABASE_URL=postgresql://productiveminer:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/productiveminer_db
+      - REDIS_URL=redis://redis:6379
+      - ENABLE_API_ACCESS=true
+      - ACCESS_TIERS=basic,premium,enterprise
+    volumes:
+      - research-data:/app/data
+      - research-docs:/app/docs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - productiveminer-network
+
+  # Validator Service
+  validator:
+    build:
+      context: ./validator
+      dockerfile: Dockerfile
+    container_name: productiveminer-validator
+    restart: unless-stopped
+    ports:
+      - "5004:5000"
+    environment:
+      - VALIDATOR_TYPE=core
+      - STAKE_AMOUNT=100000
+      - VALIDATOR_ADDRESS=${VALIDATOR_ADDRESS:-0x0000000000000000000000000000000000000000}
+      - BLOCKCHAIN_URL=http://productiveminer-node:8545
+      - MIN_STAKE=1000
+      - COMMISSION_RATE=0.05
+    volumes:
+      - validator-data:/app/data
+      - validator-keys:/app/keys
+    depends_on:
+      - productiveminer-node
+    networks:
+      - productiveminer-network
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-productiveminer
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - productiveminer-network
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-productiveminer
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-productiveminer}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - productiveminer-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-productiveminer
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - productiveminer-backend
+      - productiveminer-frontend
+      - mathematical-engine
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Database Admin Tool
+  adminer:
+    image: adminer:latest
+    container_name: adminer-productiveminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DESIGN=pepa-linha
+    depends_on:
+      - postgres
+    networks:
+      - productiveminer-network
+
+  # Smart Contracts Service
+  productiveminer-contracts:
+    build:
+      context: ./contracts
+      dockerfile: Dockerfile
+    container_name: productiveminer-contracts
+    restart: unless-stopped
+    ports:
+      - "8547:8545"
+    environment:
+      - NODE_ENV=development
+      - HARDHAT_NETWORK=localhost
+    volumes:
+      - contracts-data:/app/artifacts
+      - contracts-cache:/app/cache
+      - contracts-logs:/app/logs
+    networks:
+      - productiveminer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  # Blockchain volumes
+  blockchain-data:
+    driver: local
+  blockchain-logs:
+    driver: local
+  
+  # Engine volumes
+  engine-data:
+    driver: local
+  engine-logs:
+    driver: local
+  
+  # Backend volumes
+  backend-data:
+    driver: local
+  backend-logs:
+    driver: local
+  
+  # Frontend volumes
+  frontend-build:
+    driver: local
+  
+  # Database volumes
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  
+  # ML volumes
+  ml-models:
+    driver: local
+  ml-data:
+    driver: local
+  ml-logs:
+    driver: local
+  
+  # Research volumes
+  research-data:
+    driver: local
+  research-docs:
+    driver: local
+  
+  # Validator volumes
+  validator-data:
+    driver: local
+  validator-keys:
+    driver: local
+  
+  # Monitoring volumes
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  
+  # Nginx volumes
+  nginx-logs:
+    driver: local
+  contracts-data:
+    driver: local
+  contracts-cache:
+    driver: local
+  contracts-logs:
+    driver: local
+
+networks:
+  productiveminer-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

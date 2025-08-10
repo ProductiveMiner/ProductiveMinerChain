@@ -1,0 +1,31 @@
+{
+  "name": "productiveminer-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.11.2",
+    "axios": "^1.4.0",
+    "react-scripts": "5.0.1",
+    "react-icons": "^4.10.1",
+    "framer-motion": "^10.16.4",
+    "react-query": "^3.39.3",
+    "socket.io-client": "^4.7.2",
+    "recharts": "^2.8.0",
+    "react-countup": "^6.4.2",
+    "react-intersection-observer": "^9.5.2"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "GENERATE_SOURCEMAP=false react-scripts build",
+    "build-cache-bust": "GENERATE_SOURCEMAP=false REACT_APP_BUILD_TIME=$(date +%s) react-scripts build",
+    "build-force-new": "GENERATE_SOURCEMAP=false REACT_APP_BUILD_TIME=$(date +%s) REACT_APP_VERSION=$(date +%Y%m%d%H%M%S) react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+  }
+}
