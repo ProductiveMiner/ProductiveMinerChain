@@ -22,15 +22,71 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
-// Basic health check
+// Health check endpoint
 router.get('/', (req, res) => {
-  res.status(200).json({
+  res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV,
-    version: process.env.npm_package_version || '1.0.0'
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
   });
+});
+
+// Database test endpoint
+router.get('/database', async (req, res) => {
+  try {
+    // Test basic connection
+    const connectionTest = await query('SELECT NOW() as current_time');
+    
+    // Check if tables exist
+    const tablesTest = await query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('blocks', 'transactions', 'mining_sessions', 'users')
+    `);
+    
+    // Check table counts
+    const blocksCount = await query('SELECT COUNT(*) as count FROM blocks');
+    const transactionsCount = await query('SELECT COUNT(*) as count FROM transactions');
+    const miningSessionsCount = await query('SELECT COUNT(*) as count FROM mining_sessions');
+    const usersCount = await query('SELECT COUNT(*) as count FROM users');
+    
+    // Check recent data
+    const recentBlocks = await query('SELECT block_number, status, created_at FROM blocks ORDER BY block_number DESC LIMIT 5');
+    const recentSessions = await query('SELECT id, status, coins_earned, created_at FROM mining_sessions ORDER BY created_at DESC LIMIT 5');
+    
+    res.json({
+      status: 'healthy',
+      database: {
+        connection: 'connected',
+        currentTime: connectionTest.rows[0].current_time,
+        tables: {
+          found: tablesTest.rows.map(row => row.table_name),
+          counts: {
+            blocks: parseInt(blocksCount.rows[0]?.count || 0),
+            transactions: parseInt(transactionsCount.rows[0]?.count || 0),
+            miningSessions: parseInt(miningSessionsCount.rows[0]?.count || 0),
+            users: parseInt(usersCount.rows[0]?.count || 0)
+          }
+        },
+        recentData: {
+          blocks: recentBlocks.rows,
+          miningSessions: recentSessions.rows
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({
+      status: 'error',
+      database: {
+        connection: 'failed',
+        error: error.message
+      }
+    });
+  }
 });
 
 // Detailed health check with database and Redis

@@ -18,13 +18,16 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
-// Create connection pool
+// Create connection pool with better error handling
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-  ssl: false
+  connectionTimeoutMillis: 5000, // Increased timeout
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  // Add retry logic
+  retryDelay: 1000,
+  maxRetries: 3
 });
 
 // Test the connection
@@ -69,9 +72,35 @@ async function getClient() {
   return await pool.connect();
 }
 
+// Check if database is available
+async function isDatabaseAvailable() {
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    return true;
+  } catch (error) {
+    logger.warn('Database not available:', error.message);
+    return false;
+  }
+}
+
+// Safe query function that returns fallback data if database is unavailable
+async function safeQuery(text, params, fallbackData = null) {
+  try {
+    const result = await query(text, params);
+    return result;
+  } catch (error) {
+    logger.warn('Database query failed, using fallback data:', error.message);
+    return fallbackData;
+  }
+}
+
 module.exports = {
   connectDB,
   query,
   getClient,
-  pool
+  pool,
+  isDatabaseAvailable,
+  safeQuery
 };

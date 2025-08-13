@@ -63,7 +63,7 @@ const Contact = () => {
 
   const contactInfo = {
     email: 'admin@productiveminer.org',
-    phone: '+1 (555) 123-4567',
+    phone: '+1 (XXX) XXX-XXXX',
     address: '123 Blockchain Street, Crypto City, CC 12345',
     social: {
       twitter: 'https://twitter.com/ProductiveMiner',

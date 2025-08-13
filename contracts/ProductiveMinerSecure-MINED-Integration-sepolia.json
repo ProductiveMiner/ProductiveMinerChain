@@ -1,0 +1,24 @@
+{
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployer": "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4",
+  "productiveMiner": "0x305a5217D8e4f2d8C02e0345da739713EF386068",
+  "minedToken": "0x08498d4a6Db9f2f97196c89Bf4B26f13Add16316",
+  "deploymentTime": "2025-08-12T16:59:01.701Z",
+  "transactions": {
+    "deployment": "0x19d50e4e223bfb1516cd4f00b585d965759062788bbb47e6718175e7ec76befd",
+    "addMinter": "0x73d8d2348aa88154f4295fa2261370580a92d107484f11767cbb89816369f894",
+    "updateContract": "0xb38b6046c5acdc6a561d6a13d2151438406787193a5efc9a67d0b41d710ffca3"
+  },
+  "contractInfo": {
+    "owner": "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4",
+    "maxDifficulty": "1000000",
+    "baseReward": "1000",
+    "paused": false,
+    "minedTokenIntegration": true
+  },
+  "etherscanUrls": {
+    "productiveMiner": "https://sepolia.etherscan.io/address/0x305a5217D8e4f2d8C02e0345da739713EF386068",
+    "minedToken": "https://sepolia.etherscan.io/address/0x08498d4a6Db9f2f97196c89Bf4B26f13Add16316"
+  }
+}

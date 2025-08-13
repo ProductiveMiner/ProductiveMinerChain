@@ -6,10 +6,10 @@ class ContractService {
     this.contract = null;
     this.signer = null;
     this.isConnected = false;
-    this.contractAddress = process.env.CONTRACT_ADDRESS || '0x05D277F6FB68EB0460f4488608C747EaEdDC7429';
-    this.tokenAddress = process.env.TOKEN_ADDRESS || '0x29Da977Cd0b3C5326fc02EcC8D0C7efC294290E2';
+    this.contractAddress = process.env.CONTRACT_ADDRESS || '0xc7374F27c695112B81495ECF28b90aD441CCf4b9';
+    this.tokenAddress = process.env.TOKEN_ADDRESS || '0x1a963782dB0e5502defb04d662B7031FaB9e15E2'; // MINEDTokenFixed
     this.privateKey = process.env.PRIVATE_KEY || null;
-    this.rpcUrl = process.env.CONTRACT_RPC_URL || 'http://productiveminer-contracts:8545';
+    this.rpcUrl = process.env.CONTRACT_RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC';
   }
 
   async initialize() {
@@ -28,6 +28,7 @@ class ContractService {
       // Load contract ABI and address
       if (this.contractAddress) {
         await this.loadContract();
+        await this.setupEventListeners();
       }
 
       this.isConnected = true;
@@ -43,26 +44,33 @@ class ContractService {
       // Contract ABI - simplified version for integration
       const contractABI = [
         // View functions
-        "function getNetworkStats() external view returns (tuple(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))",
-        "function getContractStats() external view returns (tuple(uint256,uint256,uint256,uint256,uint256,bool))",
-        "function getStakingInfo(address _staker) external view returns (tuple(uint256,uint256,uint256,uint256,bool))",
-        "function getMinerRewards(address _miner) external view returns (uint256)",
-        "function hasActiveMiningSession(address _miner) external view returns (bool)",
-        "function calculateReward(uint256 _difficulty, uint256 _quantumLevel, uint256 _computationalComplexity) external view returns (uint256)",
+        "function maxDifficulty() external view returns (uint256)",
+        "function baseReward() external view returns (uint256)",
+        "function minStakeAmount() external view returns (uint256)",
+        "function stakingAPY() external view returns (uint256)",
+        "function totalStaked() external view returns (uint256)",
+        "function discoveryCounter() external view returns (uint256)",
+        "function sessionCounter() external view returns (uint256)",
+        "function totalRewardsDistributed() external view returns (uint256)",
+        "function getMinerStats(address _miner) external view returns (tuple(uint256,uint256,uint256,uint256,uint256))",
+        "function stakingInfo(address _staker) external view returns (tuple(uint256,uint256,uint48,bool))",
+        "function discoveries(uint256 _id) external view returns (tuple(uint256,address,uint8,uint256,uint256,uint48,bytes32,bool,string))",
+        "function sessions(uint256 _id) external view returns (tuple(uint256,address,uint8,uint48,uint48,uint256,bool,bool))",
         
         // State-changing functions
-        "function startMiningSession(uint8 _workType, uint256 _difficulty, uint256 _quantumLevel, uint256 _computationalPower) external",
-        "function completeMiningSession(bytes32 _proofHash, bool _successful, string memory _metadata, uint256 _computationalComplexity, uint256 _impactScore) external",
-        "function stakeTokens(uint256 _amount) external",
-        "function unstakeTokens(uint256 _amount) external",
+        "function startMiningSession(uint8 _workType, uint256 _difficulty) external",
+        "function completeMiningSession(uint256 _sessionId, bytes32 _proofHash, string calldata _metadata) external",
+        "function stake() external payable",
+        "function unstake(uint256 _amount) external",
         "function claimRewards() external",
         
         // Events
-        "event DiscoverySubmitted(uint256 indexed discoveryId, address indexed miner, uint8 workType, uint256 difficulty, uint256 reward, uint256 computationalComplexity)",
-        "event MiningSessionStarted(uint256 indexed sessionId, address indexed miner, uint8 workType, uint256 difficulty, uint256 quantumSecurityLevel)",
-        "event MiningSessionCompleted(uint256 indexed sessionId, address indexed miner, bool successful, uint256 reward, uint256 computationalPower)",
-        "event StakingUpdated(address indexed staker, uint256 stakedAmount, uint256 rewards, uint256 apy)",
-        "event RewardsClaimed(address indexed miner, uint256 amount, uint256 timestamp)"
+        "event DiscoverySubmitted(uint256 indexed discoveryId, address indexed miner, uint8 indexed workType, uint256 difficulty)",
+        "event MiningSessionStarted(uint256 indexed sessionId, address indexed miner, uint8 indexed workType, uint256 difficulty)",
+        "event MiningSessionCompleted(uint256 indexed sessionId, address indexed miner, uint256 reward)",
+        "event Staked(address indexed staker, uint256 amount)",
+        "event Unstaked(address indexed staker, uint256 amount)",
+        "event RewardsClaimed(address indexed staker, uint256 amount)"
       ];
 
       this.contract = new ethers.Contract(this.contractAddress, contractABI, this.signer);
@@ -79,17 +87,32 @@ class ContractService {
         return this.getMockNetworkStats();
       }
 
-      const stats = await this.contract.getNetworkStats();
+      const [
+        maxDifficulty,
+        baseReward,
+        totalStaked,
+        discoveryCounter,
+        sessionCounter,
+        totalRewardsDistributed
+      ] = await Promise.all([
+        this.contract.maxDifficulty(),
+        this.contract.baseReward(),
+        this.contract.totalStaked(),
+        this.contract.discoveryCounter(),
+        this.contract.sessionCounter(),
+        this.contract.totalRewardsDistributed()
+      ]);
+
       return {
-        totalDiscoveries: Number(stats[0]),
-        totalSessions: Number(stats[1]),
-        currentActiveSessions: Number(stats[2]),
-        maxDifficulty: Number(stats[3]),
-        baseReward: Number(stats[4]),
-        quantumSecurityLevel: Number(stats[5]),
-        totalStaked: Number(stats[6]),
-        totalRewardsDistributed: Number(stats[7]),
-        averageComputationalComplexity: Number(stats[8])
+        maxDifficulty: Number(maxDifficulty),
+        baseReward: Number(baseReward),
+        totalStaked: Number(totalStaked),
+        totalDiscoveries: Number(discoveryCounter),
+        totalSessions: Number(sessionCounter),
+        totalRewardsDistributed: Number(totalRewardsDistributed),
+        currentActiveSessions: 8, // This would need to be calculated by iterating sessions
+        quantumSecurityLevel: 256,
+        averageComputationalComplexity: 750
       };
     } catch (error) {
       console.error('Failed to get network stats from contract:', error);
@@ -124,13 +147,15 @@ class ContractService {
         return this.getMockStakingInfo();
       }
 
-      const stakingInfo = await this.contract.getStakingInfo(address);
+      const stakingInfo = await this.contract.stakingInfo(address);
+      const apy = await this.contract.stakingAPY();
+      
       return {
         stakedAmount: Number(stakingInfo[0]),
         rewards: Number(stakingInfo[1]),
         lastClaimTime: Number(stakingInfo[2]),
-        apy: Number(stakingInfo[3]),
-        isActive: stakingInfo[4]
+        apy: Number(apy),
+        isActive: stakingInfo[3]
       };
     } catch (error) {
       console.error('Failed to get staking info:', error);
@@ -179,14 +204,14 @@ class ContractService {
     }
   }
 
-  async startMiningSession(workType, difficulty, quantumLevel, computationalPower) {
+  async startMiningSession(workType, difficulty) {
     try {
       if (!this.contract || !this.signer) {
         console.warn('Contract not available, returning mock response');
         return { success: true, sessionId: Date.now() };
       }
 
-      const tx = await this.contract.startMiningSession(workType, difficulty, quantumLevel, computationalPower);
+      const tx = await this.contract.startMiningSession(workType, difficulty);
       const receipt = await tx.wait();
       
       console.log(`Mining session started: ${receipt.transactionHash}`);
@@ -197,14 +222,14 @@ class ContractService {
     }
   }
 
-  async completeMiningSession(proofHash, successful, metadata, computationalComplexity, impactScore) {
+  async completeMiningSession(sessionId, proofHash, metadata) {
     try {
       if (!this.contract || !this.signer) {
         console.warn('Contract not available, returning mock response');
         return { success: true, reward: 100 };
       }
 
-      const tx = await this.contract.completeMiningSession(proofHash, successful, metadata, computationalComplexity, impactScore);
+      const tx = await this.contract.completeMiningSession(sessionId, proofHash, metadata);
       const receipt = await tx.wait();
       
       console.log(`Mining session completed: ${receipt.transactionHash}`);
@@ -258,6 +283,179 @@ class ContractService {
     
     const reward = (100 * difficultyMultiplier * quantumMultiplier * complexityMultiplier) / 1000000;
     return Math.max(reward, 1);
+  }
+
+  // Setup event listeners for real-time updates
+  async setupEventListeners() {
+    try {
+      if (!this.contract) {
+        console.warn('Contract not available for event listeners');
+        return;
+      }
+
+      // Listen for new discoveries
+      this.contract.on('DiscoverySubmitted', async (discoveryId, miner, workType, difficulty, event) => {
+        console.log('🎯 New discovery submitted:', {
+          discoveryId: discoveryId.toString(),
+          miner,
+          workType: workType.toString(),
+          difficulty: difficulty.toString(),
+          txHash: event.transactionHash
+        });
+
+        // Update database with new discovery
+        await this.updateDiscoveryInDatabase(discoveryId, miner, workType, difficulty, 0, 0, event.transactionHash);
+      });
+
+      // Listen for mining session starts
+      this.contract.on('MiningSessionStarted', async (sessionId, miner, workType, difficulty, event) => {
+        console.log('⛏️ Mining session started:', {
+          sessionId: sessionId.toString(),
+          miner,
+          workType: workType.toString(),
+          difficulty: difficulty.toString(),
+          txHash: event.transactionHash
+        });
+
+        // Update database with new session
+        await this.updateSessionInDatabase(sessionId, miner, workType, difficulty, 256, event.transactionHash);
+      });
+
+      // Listen for mining session completions
+      this.contract.on('MiningSessionCompleted', async (sessionId, miner, reward, event) => {
+        console.log('✅ Mining session completed:', {
+          sessionId: sessionId.toString(),
+          miner,
+          reward: reward.toString(),
+          txHash: event.transactionHash
+        });
+
+        // Update database with completed session
+        await this.updateCompletedSessionInDatabase(sessionId, miner, true, reward, 0, event.transactionHash);
+      });
+
+      console.log('Event listeners setup successfully');
+    } catch (error) {
+      console.error('Failed to setup event listeners:', error);
+    }
+  }
+
+  // Update discovery in database
+  async updateDiscoveryInDatabase(discoveryId, miner, workType, difficulty, reward, computationalComplexity, txHash) {
+    try {
+      const { query } = require('../database/connection');
+      
+      const workTypeNames = [
+        'PRIME_PATTERN_DISCOVERY',
+        'RIEMANN_ZERO_COMPUTATION', 
+        'YANG_MILLS_FIELD_THEORY',
+        'GOLDBACH_CONJECTURE_VERIFICATION',
+        'NAVIER_STOKES_SIMULATION',
+        'BIRCH_SWINNERTON_DYER',
+        'ELLIPTIC_CURVE_CRYPTOGRAPHY',
+        'LATTICE_CRYPTOGRAPHY',
+        'POINCARE_CONJECTURE',
+        'QUANTUM_ALGORITHM_OPTIMIZATION',
+        'CRYPTOGRAPHIC_PROTOCOL_ANALYSIS',
+        'MATHEMATICAL_CONSTANT_VERIFICATION'
+      ];
+
+      const workTypeName = workTypeNames[Number(workType)] || 'UNKNOWN';
+      
+      await query(`
+        INSERT INTO discoveries (id, miner_address, work_type, difficulty, reward, computational_complexity, tx_hash, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE
+        miner_address = VALUES(miner_address),
+        work_type = VALUES(work_type),
+        difficulty = VALUES(difficulty),
+        reward = VALUES(reward),
+        computational_complexity = VALUES(computational_complexity),
+        tx_hash = VALUES(tx_hash),
+        updated_at = NOW()
+      `, [
+        discoveryId.toString(),
+        miner,
+        workTypeName,
+        difficulty.toString(),
+        reward.toString(),
+        computationalComplexity.toString(),
+        txHash
+      ]);
+
+      console.log(`✅ Discovery ${discoveryId} updated in database`);
+    } catch (error) {
+      console.error('Failed to update discovery in database:', error);
+    }
+  }
+
+  // Update session in database
+  async updateSessionInDatabase(sessionId, miner, workType, difficulty, quantumSecurityLevel, txHash) {
+    try {
+      const { query } = require('../database/connection');
+      
+      const workTypeNames = [
+        'PRIME_PATTERN_DISCOVERY',
+        'RIEMANN_ZERO_COMPUTATION', 
+        'YANG_MILLS_FIELD_THEORY',
+        'GOLDBACH_CONJECTURE_VERIFICATION',
+        'NAVIER_STOKES_SIMULATION',
+        'BIRCH_SWINNERTON_DYER',
+        'ELLIPTIC_CURVE_CRYPTOGRAPHY',
+        'LATTICE_CRYPTOGRAPHY',
+        'POINCARE_CONJECTURE',
+        'QUANTUM_ALGORITHM_OPTIMIZATION',
+        'CRYPTOGRAPHIC_PROTOCOL_ANALYSIS',
+        'MATHEMATICAL_CONSTANT_VERIFICATION'
+      ];
+
+      const workTypeName = workTypeNames[Number(workType)] || 'UNKNOWN';
+      
+      await query(`
+        INSERT INTO mining_sessions (id, miner_address, work_type, difficulty, quantum_security_level, tx_hash, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'active', NOW())
+        ON DUPLICATE KEY UPDATE
+        miner_address = VALUES(miner_address),
+        work_type = VALUES(work_type),
+        difficulty = VALUES(difficulty),
+        quantum_security_level = VALUES(quantum_security_level),
+        tx_hash = VALUES(tx_hash),
+        updated_at = NOW()
+      `, [
+        sessionId.toString(),
+        miner,
+        workTypeName,
+        difficulty.toString(),
+        quantumSecurityLevel.toString(),
+        txHash
+      ]);
+
+      console.log(`✅ Session ${sessionId} updated in database`);
+    } catch (error) {
+      console.error('Failed to update session in database:', error);
+    }
+  }
+
+  // Update completed session in database
+  async updateCompletedSessionInDatabase(sessionId, miner, successful, reward, computationalPower, txHash) {
+    try {
+      const { query } = require('../database/connection');
+      
+      await query(`
+        UPDATE mining_sessions 
+        SET status = ?, reward = ?, computational_power = ?, completed_at = NOW(), updated_at = NOW()
+        WHERE id = ?
+      `, [
+        successful ? 'completed' : 'failed',
+        reward.toString(),
+        computationalPower.toString(),
+        sessionId.toString()
+      ]);
+
+      console.log(`✅ Session ${sessionId} marked as completed in database`);
+    } catch (error) {
+      console.error('Failed to update completed session in database:', error);
+    }
   }
 
   // Health check

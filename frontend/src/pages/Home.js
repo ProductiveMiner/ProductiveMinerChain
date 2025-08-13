@@ -64,14 +64,16 @@ const Home = () => {
 
   const formatNumber = (num) => {
     if (!num) return '0';
-    if (num >= 1000000000) {
-      return (num / 1000000000).toFixed(1) + 'B';
-    } else if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
+    // Convert BigInt to Number if needed
+    const numberValue = typeof num === 'bigint' ? Number(num) : num;
+    if (numberValue >= 1000000000) {
+      return (numberValue / 1000000000).toFixed(1) + 'B';
+    } else if (numberValue >= 1000000) {
+      return (numberValue / 1000000).toFixed(1) + 'M';
+    } else if (numberValue >= 1000) {
+      return (numberValue / 1000).toFixed(1) + 'K';
     }
-    return num.toLocaleString();
+    return numberValue.toLocaleString();
   };
 
   const formatCurrency = (amount) => {
@@ -91,56 +93,23 @@ const Home = () => {
 
   // Use real data or fallback to loading state
   const stats = {
-    totalSupply: tokenData?.totalSupply || 0,
-    circulatingSupply: tokenData?.circulatingSupply || 0,
-    stakingAPY: tokenData?.stakingAPY || 0,
-    totalStaked: tokenData?.totalStaked || 0,
-    activeValidators: networkStats?.system?.blockchain?.validators || networkStats?.network?.validatorsActive || 0,
-    totalBlocks: networkStats?.system?.blockchain?.height || networkStats?.network?.blockHeight || 0,
-    networkHashrate: networkStats?.network?.hashRate || networkStats?.system?.feedbackLoop?.validationSpeed || 0,
-    totalTransactions: networkStats?.network?.tps || 0,
-    activeMiners: miningStats?.networkStats?.totalActiveMiners || 0,
-    researchValue: networkStats?.flow?.feedbackLoop?.researchValue || 0,
-    totalDiscoveries: networkStats?.system?.blockchain?.discoveries || 0,
-    bitStrengthAdded: Math.min(networkStats?.system?.security?.currentBitStrength || 0, 1024), // Cap at realistic value
-    quantumSecurityLevel: networkStats?.system?.security?.quantumSecurityLevel || 0
+    totalSupply: tokenData?.data?.totalSupply || 0,
+    circulatingSupply: tokenData?.data?.circulatingSupply || 0,
+    stakingAPY: tokenData?.data?.stakingAPY || 0,
+    totalStaked: tokenData?.data?.totalStaked || 0,
+    activeValidators: networkStats?.data?.totalValidators || 0,
+    totalBlocks: networkStats?.data?.totalBlocks || 0,
+    networkHashrate: networkStats?.data?.currentActiveSessions || 0,
+    totalTransactions: networkStats?.data?.totalTransactions || 0,
+    activeMiners: miningStats?.data?.currentActiveSessions || 0,
+    researchValue: networkStats?.data?.totalDiscoveries || 0,
+    totalDiscoveries: networkStats?.data?.totalDiscoveries || 0,
+    bitStrengthAdded: Math.min(parseInt(networkStats?.data?.quantumSecurityLevel) || 0, 1024), // Cap at realistic value
+    quantumSecurityLevel: parseInt(networkStats?.data?.quantumSecurityLevel) || 0
   };
 
-  // Real mathematical engines data from API
-  const mathematicalEngines = engineDistribution?.engines || [
-    {
-      name: 'Riemann Zeros',
-      description: 'Compute non-trivial zeros of the Riemann zeta function',
-      icon: <FaBrain />,
-      complexity: 'Ultra-Extreme',
-      discoveries: 450,
-      value: 225000
-    },
-    {
-      name: 'Yang-Mills Theory',
-      description: 'Solve Yang-Mills field equations for quantum chromodynamics',
-      icon: <FaNetworkWired />,
-      complexity: 'Ultra-Extreme',
-      discoveries: 320,
-      value: 256000
-    },
-    {
-      name: 'Goldbach Conjecture',
-      description: 'Verify Goldbach conjecture for large even numbers',
-      icon: <FaGraduationCap />,
-      complexity: 'Extreme',
-      discoveries: 280,
-      value: 224000
-    },
-    {
-      name: 'Navier-Stokes',
-      description: 'Solve Navier-Stokes equations for fluid dynamics',
-      icon: <FaCog />,
-      complexity: 'Ultra-Extreme',
-      discoveries: 200,
-      value: 160000
-    }
-  ];
+  // Real mathematical engines data from API - no mock data
+  const mathematicalEngines = engineDistribution?.engines || [];
 
   return (
     <div className="home">

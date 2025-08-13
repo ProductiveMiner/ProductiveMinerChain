@@ -7,7 +7,6 @@ import './App.css';
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import { WalletProvider } from './contexts/WalletContext';
 
 // Pages
 import Home from './pages/Home';
@@ -19,6 +18,7 @@ import Wallet from './pages/Wallet';
 import Explorer from './pages/Explorer';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import MinedToken from './pages/MinedToken';
 
 // Create a client with retry configuration
 const queryClient = new QueryClient({
@@ -43,29 +43,28 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <WalletProvider>
-      <QueryClientProvider client={queryClient}>
-        <Router>
-          <div className="App">
-            <Navbar />
-            <AnimatePresence mode="wait">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/mining" element={<Mining />} />
-                <Route path="/research" element={<Research />} />
-                <Route path="/validators" element={<Validators />} />
-                <Route path="/wallet" element={<Wallet />} />
-                <Route path="/explorer" element={<Explorer />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-              </Routes>
-            </AnimatePresence>
-            <Footer />
-          </div>
-        </Router>
-      </QueryClientProvider>
-    </WalletProvider>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <div className="App">
+          <Navbar />
+          <AnimatePresence mode="wait">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/mining" element={<Mining />} />
+              <Route path="/research" element={<Research />} />
+              <Route path="/validators" element={<Validators />} />
+              <Route path="/wallet" element={<Wallet />} />
+              <Route path="/explorer" element={<Explorer />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/token" element={<MinedToken />} />
+            </Routes>
+          </AnimatePresence>
+          <Footer />
+        </div>
+      </Router>
+    </QueryClientProvider>
   );
 }
 

@@ -1,0 +1,359 @@
+/* MINED Token Page Styles */
+.mined-token-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Hero Section */
+.token-hero {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 60px 20px;
+  text-align: center;
+  color: white;
+}
+
+.hero-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.token-hero h1 {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin: 0 0 20px 0;
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.hero-subtitle {
+  font-size: 1.3rem;
+  margin: 0 0 40px 0;
+  opacity: 0.9;
+  line-height: 1.6;
+}
+
+.connect-section, .wallet-section {
+  margin-top: 30px;
+}
+
+.connect-section p, .wallet-section p {
+  margin: 0 0 20px 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.connect-wallet-btn, .switch-network-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 15px 30px;
+  border-radius: 30px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.connect-wallet-btn:hover, .switch-network-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+/* Token Content */
+.token-content {
+  padding: 40px 20px;
+  background: white;
+}
+
+.connect-prompt {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.prompt-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.prompt-card h3 {
+  font-size: 1.5rem;
+  margin: 0 0 20px 0;
+  color: #2d3748;
+}
+
+.prompt-card p {
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0 0 30px 0;
+}
+
+.connect-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.connect-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Info Section */
+.token-info-section {
+  padding: 60px 20px;
+  background: #f7fafc;
+}
+
+.info-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.token-info-section h2 {
+  text-align: center;
+  font-size: 2.5rem;
+  margin: 0 0 50px 0;
+  color: #2d3748;
+  font-weight: 700;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.info-card {
+  background: white;
+  border-radius: 15px;
+  padding: 30px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.info-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.info-card h3 {
+  font-size: 1.3rem;
+  margin: 0 0 20px 0;
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.info-card p {
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Stats Section */
+.token-stats-section {
+  padding: 60px 20px;
+  background: white;
+}
+
+.stats-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.token-stats-section h2 {
+  text-align: center;
+  font-size: 2.5rem;
+  margin: 0 0 50px 0;
+  color: #2d3748;
+  font-weight: 700;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 30px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 15px;
+  padding: 40px 20px;
+  text-align: center;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+}
+
+.stat-number {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+}
+
+.stat-label {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+/* Links Section */
+.token-links-section {
+  padding: 60px 20px;
+  background: #f7fafc;
+}
+
+.links-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.token-links-section h2 {
+  text-align: center;
+  font-size: 2.5rem;
+  margin: 0 0 50px 0;
+  color: #2d3748;
+  font-weight: 700;
+}
+
+.links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.link-card {
+  background: white;
+  border-radius: 15px;
+  padding: 30px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  display: block;
+}
+
+.link-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+  color: inherit;
+}
+
+.link-card h3 {
+  font-size: 1.3rem;
+  margin: 0 0 15px 0;
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.link-card p {
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .token-hero h1 {
+    font-size: 2.5rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1.1rem;
+  }
+  
+  .token-info-section h2,
+  .token-stats-section h2,
+  .token-links-section h2 {
+    font-size: 2rem;
+  }
+  
+  .info-grid,
+  .stats-grid,
+  .links-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .prompt-card {
+    padding: 30px 20px;
+  }
+  
+  .info-card,
+  .link-card {
+    padding: 25px;
+  }
+  
+  .stat-card {
+    padding: 30px 15px;
+  }
+  
+  .stat-number {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .token-hero {
+    padding: 40px 15px;
+  }
+  
+  .token-hero h1 {
+    font-size: 2rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+  
+  .connect-wallet-btn,
+  .switch-network-btn,
+  .connect-btn {
+    padding: 12px 24px;
+    font-size: 1rem;
+  }
+  
+  .token-content,
+  .token-info-section,
+  .token-stats-section,
+  .token-links-section {
+    padding: 30px 15px;
+  }
+  
+  .info-card,
+  .link-card {
+    padding: 20px;
+  }
+  
+  .stat-card {
+    padding: 25px 15px;
+  }
+  
+  .stat-number {
+    font-size: 1.8rem;
+  }
+}

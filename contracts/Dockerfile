@@ -9,23 +9,25 @@ RUN apk add --no-cache git python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (including dev dependencies for OpenZeppelin contracts)
 RUN npm install --legacy-peer-deps
 
-# Copy contract source files
+# Copy source code
 COPY . .
 
-# Create artifacts directory
-RUN mkdir -p artifacts
+# Create deployment script
+RUN echo '#!/bin/sh' > deploy.sh && \
+    echo 'echo "Installing dependencies..."' >> deploy.sh && \
+    echo 'npm install --legacy-peer-deps' >> deploy.sh && \
+    echo 'echo "Compiling contracts..."' >> deploy.sh && \
+    echo 'npx hardhat compile' >> deploy.sh && \
+    echo 'echo "Starting deployment..."' >> deploy.sh && \
+    echo 'npx hardhat run scripts/deploy-asymptotic-token-system.js --network localhost' >> deploy.sh && \
+    echo 'echo "Deployment completed!"' >> deploy.sh && \
+    chmod +x deploy.sh
 
-# Compile contracts
-RUN npx hardhat compile
-
-# Expose port for contract interactions
+# Expose port for hardhat node
 EXPOSE 8545
 
-# Set environment variables
-ENV NODE_ENV=development
-
-# Default command - run hardhat node (creates local network)
-CMD ["npx", "hardhat", "node", "--hostname", "0.0.0.0", "--port", "8545"]
+# Default command
+CMD ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]

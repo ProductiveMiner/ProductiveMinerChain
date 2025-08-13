@@ -1,0 +1,334 @@
+/* MINED Token Display Component Styles */
+.mined-token-display {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header */
+.token-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 15px;
+  color: white;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+}
+
+.token-header h2 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.add-to-metamask-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.add-to-metamask-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+/* Token Grid */
+.token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+/* Token Cards */
+.token-card {
+  background: white;
+  border-radius: 15px;
+  padding: 25px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.token-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.token-card h3 {
+  margin: 0 0 20px 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #2d3748;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Balance Card */
+.balance-card {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  border: 2px solid #f7b267;
+}
+
+.balance-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 10px;
+}
+
+.token-symbol {
+  font-size: 1.5rem;
+  color: #e53e3e;
+  font-weight: 600;
+}
+
+.wallet-info {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+/* Info Card */
+.info-card {
+  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  border: 2px solid #81c784;
+}
+
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.label {
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.value {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+/* Emission Card */
+.emission-card {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+  border: 2px solid #f06292;
+}
+
+.emission-formula {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 15px;
+  border-radius: 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 15px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.emission-params {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.param-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+/* Network Card */
+.network-card {
+  background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
+  border: 2px solid #ba68c8;
+}
+
+.network-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contract-link a {
+  color: #3182ce;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.contract-link a:hover {
+  color: #2c5282;
+  text-decoration: underline;
+}
+
+/* Actions */
+.token-actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.refresh-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.refresh-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Loading State */
+.token-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.token-loading p {
+  color: #4a5568;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Error State */
+.token-error {
+  background: #fed7d7;
+  border: 1px solid #feb2b2;
+  border-radius: 10px;
+  padding: 30px;
+  text-align: center;
+  color: #c53030;
+}
+
+.token-error h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.3rem;
+}
+
+.token-error p {
+  margin: 0 0 20px 0;
+  font-size: 1rem;
+}
+
+.retry-button {
+  background: #e53e3e;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.retry-button:hover {
+  background: #c53030;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .mined-token-display {
+    padding: 15px;
+  }
+  
+  .token-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .token-header h2 {
+    font-size: 1.5rem;
+  }
+  
+  .token-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .balance-amount {
+    font-size: 2rem;
+  }
+  
+  .token-symbol {
+    font-size: 1.2rem;
+  }
+  
+  .emission-formula {
+    font-size: 0.8rem;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .token-card {
+    padding: 20px;
+  }
+  
+  .balance-amount {
+    font-size: 1.8rem;
+  }
+  
+  .token-header h2 {
+    font-size: 1.3rem;
+  }
+}

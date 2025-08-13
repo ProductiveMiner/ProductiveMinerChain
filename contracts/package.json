@@ -1,70 +1,24 @@
 {
-  "name": "productiveminer-contracts",
-  "version": "2.0.0",
-  "description": "ProductiveMiner Smart Contracts - Mathematical Discovery Mining Platform",
-  "main": "index.js",
+  "name": "productiveminer-contracts-minimal",
+  "version": "1.0.0",
+  "description": "Minimal contract deployment for ProductiveMiner Asymptotic Token System",
   "scripts": {
     "compile": "hardhat compile",
-    "test": "hardhat test",
-    "deploy": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:testnet": "hardhat run scripts/deploy.js --network testnet",
-    "deploy:mainnet": "hardhat run scripts/deploy.js --network mainnet",
-    "verify": "hardhat verify",
-    "coverage": "hardhat coverage",
-    "lint": "solhint 'contracts/**/*.sol'",
-    "lint:fix": "solhint 'contracts/**/*.sol' --fix",
-    "size": "hardhat size-contracts",
-    "gas": "REPORT_GAS=true hardhat test",
-    "clean": "hardhat clean",
+    "deploy": "hardhat run scripts/deploy-asymptotic-token-system.js --network localhost",
     "node": "hardhat node",
-    "console": "hardhat console"
+    "test": "hardhat test"
   },
-  "keywords": [
-    "blockchain",
-    "mining",
-    "mathematical",
-    "discovery",
-    "quantum",
-    "cryptography",
-    "solidity",
-    "ethereum",
-    "defi",
-    "staking"
-  ],
-  "author": "ProductiveMiner Team",
-  "license": "MIT",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
-    "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
     "@nomicfoundation/hardhat-ethers": "^3.0.4",
-    "@nomicfoundation/hardhat-verify": "^2.0.0",
-    "@typechain/ethers-v6": "^0.5.0",
-    "@typechain/hardhat": "^9.1.0",
-    "@types/chai": "^4.3.5",
-    "@types/mocha": "^10.0.1",
-    "chai": "^4.3.7",
+    "@openzeppelin/contracts": "^5.4.0",
     "ethers": "^6.8.1",
-    "hardhat": "^2.19.1",
-    "hardhat-gas-reporter": "^1.0.9",
-    "solidity-coverage": "^0.8.5",
-    "typechain": "^8.3.1",
-    "solhint": "^4.0.0",
-    "@openzeppelin/contracts": "^5.0.0"
-  },
-  "dependencies": {
-    "@openzeppelin/contracts": "^5.0.0"
+    "hardhat": "^2.19.1"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/productiveminer/contracts.git"
-  },
-  "bugs": {
-    "url": "https://github.com/productiveminer/contracts/issues"
-  },
-  "homepage": "https://productiveminer.com"
+  "dependencies": {
+    "dotenv": "^17.2.1"
+  }
 }

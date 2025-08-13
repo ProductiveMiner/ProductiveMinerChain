@@ -13,7 +13,9 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
     difficulty,
     engine,
     timestamp,
-    hashrate
+    hashrate,
+    tokenRewards,
+    tokenBalance
   } = miningData || {};
 
   const handleShare = () => {
@@ -87,22 +89,22 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
           >
             <div className="detail-row">
               <span className="detail-label">Block Number:</span>
-              <span className="detail-value">#{blockNumber}</span>
+              <span className="detail-value">#{typeof blockNumber === 'bigint' ? Number(blockNumber).toLocaleString() : (typeof blockNumber === 'number' ? blockNumber.toLocaleString() : String(blockNumber || 0))}</span>
             </div>
             
             <div className="detail-row">
               <span className="detail-label">Engine:</span>
-              <span className="detail-value">{engine}</span>
+              <span className="detail-value">{engine ? engine.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Unknown'}</span>
             </div>
             
             <div className="detail-row">
               <span className="detail-label">Difficulty:</span>
-              <span className="detail-value">{difficulty?.toLocaleString()}</span>
+              <span className="detail-value">{difficulty ? Number(difficulty).toLocaleString() : '0'}</span>
             </div>
             
             <div className="detail-row">
               <span className="detail-label">Hashrate:</span>
-              <span className="detail-value">{hashrate}</span>
+              <span className="detail-value">{hashrate ? Number(hashrate).toLocaleString() : '0'} H/s</span>
             </div>
             
             <div className="detail-row">
@@ -113,7 +115,7 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
             </div>
           </motion.div>
 
-          {/* Reward section */}
+          {/* ETH Reward section */}
           <motion.div
             className="reward-section"
             initial={{ opacity: 0, y: 20 }}
@@ -124,10 +126,44 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
               <FaCoins />
             </div>
             <div className="reward-amount">
-              <span className="reward-label">Reward Earned</span>
-              <span className="reward-value">{reward} MINED</span>
+              <span className="reward-label">ETH Reward Earned</span>
+              <span className="reward-value">{reward} ETH</span>
             </div>
           </motion.div>
+
+          {/* MINED Token Rewards Section */}
+          {tokenRewards && parseFloat(tokenRewards) > 0 && (
+            <motion.div
+              className="token-rewards-section"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 }}
+            >
+              <div className="token-rewards-header">
+                <span className="token-icon">🪙</span>
+                <span className="token-title">MINED Token Rewards</span>
+              </div>
+              <div className="token-rewards-content">
+                <div className="token-reward-item">
+                  <span className="token-label">Tokens Earned:</span>
+                  <span className="token-value">{tokenRewards} MINED</span>
+                </div>
+                <div className="token-reward-item">
+                  <span className="token-label">Current Balance:</span>
+                  <span className="token-value">{tokenBalance} MINED</span>
+                </div>
+                <div className="token-reward-item">
+                  <span className="token-label">Status:</span>
+                  <span className="token-value" style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+                    ✅ Tokens Minted Successfully
+                  </span>
+                </div>
+              </div>
+              <div className="token-note">
+                MINED tokens have been minted to your wallet. Check your MetaMask or wallet app to see the updated balance.
+              </div>
+            </motion.div>
+          )}
 
           {/* Block hash */}
           {blockHash && (

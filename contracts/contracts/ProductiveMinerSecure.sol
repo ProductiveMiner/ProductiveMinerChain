@@ -11,7 +11,17 @@ pragma solidity 0.8.20;
  * - Reentrancy protection
  * - Gas optimizations
  * - Comprehensive event logging
+ * - MINED Token Integration
  */
+
+    // MINED Token Interface
+    interface IMINEDToken {
+        function distributeMiningRewards(address _to, uint256 _amount) external;
+        function distributeStakingRewards(address _to, uint256 _amount) external;
+        function balanceOf(address account) external view returns (uint256);
+        function transfer(address to, uint256 amount) external returns (bool);
+    }
+
 contract ProductiveMinerSecure {
     // =============================================================================
     // CUSTOM ERRORS (Gas efficient)
@@ -115,6 +125,9 @@ contract ProductiveMinerSecure {
     uint256 public sessionCounter;
     uint256 public totalStaked;
 
+    // MINED Token Integration (1 variable)
+    IMINEDToken public minedToken;
+
     // =============================================================================
     // EVENTS
     // =============================================================================
@@ -122,6 +135,9 @@ contract ProductiveMinerSecure {
     event DiscoverySubmitted(uint256 indexed discoveryId, address indexed miner, WorkType indexed workType, uint256 difficulty);
     event MiningSessionStarted(uint256 indexed sessionId, address indexed miner, WorkType indexed workType, uint256 difficulty);
     event MiningSessionCompleted(uint256 indexed sessionId, address indexed miner, uint256 reward);
+    event MINEDTokensMinted(address indexed miner, uint256 blockHeight);
+    event MINEDTokenFallback(address indexed miner, uint256 ethAmount);
+    event MINEDTokenAddressUpdated(address indexed oldAddress, address indexed newAddress);
     event Staked(address indexed staker, uint256 amount);
     event Unstaked(address indexed staker, uint256 amount);
     event RewardsClaimed(address indexed staker, uint256 amount);
@@ -165,12 +181,14 @@ contract ProductiveMinerSecure {
     // CONSTRUCTOR
     // =============================================================================
 
-    constructor() payable {
+    constructor(address _minedTokenAddress) payable {
+        require(_minedTokenAddress != address(0), "Invalid MINED token address");
         owner = msg.sender;
         paused = false;
         discoveryCounter = 0;
         sessionCounter = 0;
         totalStaked = 0;
+        minedToken = IMINEDToken(_minedTokenAddress);
         emit ContractDeployed(msg.sender, uint48(block.timestamp));
     }
 
@@ -268,8 +286,23 @@ contract ProductiveMinerSecure {
         emit MiningSessionCompleted(_sessionId, msg.sender, calculatedReward);
         emit DiscoverySubmitted(newDiscoveryId, msg.sender, currentSession.workType, currentSession.difficulty);
 
-        // Secure transfer with reentrancy protection (Interactions last)
-        _secureTransfer(payable(msg.sender), calculatedReward);
+        // Distribute MINED tokens from mining rewards pool to miner (Interactions last)
+        if (address(minedToken) != address(0)) {
+            // Convert reward to MINED token units (18 decimals)
+            uint256 minedTokenReward = calculatedReward * 10**18;
+            try minedToken.distributeMiningRewards(msg.sender, minedTokenReward) {
+                // MINED tokens distributed successfully
+                emit MINEDTokensMinted(msg.sender, minedTokenReward);
+            } catch {
+                // Fallback to ETH transfer if MINED token distribution fails
+                _secureTransfer(payable(msg.sender), calculatedReward);
+                emit MINEDTokenFallback(msg.sender, calculatedReward);
+            }
+        } else {
+            // Fallback to ETH transfer if MINED token not configured
+            _secureTransfer(payable(msg.sender), calculatedReward);
+            emit MINEDTokenFallback(msg.sender, calculatedReward);
+        }
     }
 
     // =============================================================================
@@ -447,6 +480,19 @@ contract ProductiveMinerSecure {
         if (balance != 0) {
             _secureTransfer(payable(owner), balance);
         }
+    }
+
+    /**
+     * @dev Update MINED token contract address
+     * @param _newMinedTokenAddress New MINED token contract address
+     */
+    function updateMINEDTokenAddress(address _newMinedTokenAddress) external onlyOwner {
+        require(_newMinedTokenAddress != address(0), "Invalid MINED token address");
+        
+        address oldAddress = address(minedToken);
+        minedToken = IMINEDToken(_newMinedTokenAddress);
+        
+        emit MINEDTokenAddressUpdated(oldAddress, _newMinedTokenAddress);
     }
 
     // =============================================================================

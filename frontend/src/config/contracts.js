@@ -1,5 +1,5 @@
 // ProductiveMiner Contract Configuration
-// Updated for deployed ProductiveMinerSecure contract
+// Updated for deployed ProductiveMinerFixed contract
 
 const CONTRACT_CONFIG = {
   // Network Configuration
@@ -33,31 +33,53 @@ const CONTRACT_CONFIG = {
 
   // Contract Configuration
   CONTRACTS: {
-    // ProductiveMinerSecure Contract (Deployed on Sepolia)
-    PRODUCTIVE_MINER_SECURE: {
-      name: 'ProductiveMinerSecure',
-      address: '0xc7374F27c695112B81495ECF28b90aD441CCf4b9', // Live deployed contract address
-      network: 'SEPOLIA',
-      abi: 'ProductiveMinerSecure.json', // We'll create this
-      verified: true,
-      deploymentTx: '0x010fa53f173c7842450b25aa396f7716cf7b48f879ec455d4c000f8c665d52f5', // Live deployment transaction hash
-      deployer: '', // Add your deployer address
-      deploymentDate: '2025-08-10',
-      etherscanUrl: 'https://sepolia.etherscan.io/address/0xc7374F27c695112B81495ECF28b90aD441CCf4b9#code'
-    },
+    // ProductiveMinerFixed Contract (Fixed Version with Proper Token Integration)
+               PRODUCTIVE_MINER_FIXED: {
+             name: 'ProductiveMinerFixed',
+             address: '0xB576afEfB7C466B0146ee81A9256a3DE1ACF2146', // Fixed ProductiveMiner address (CORRECTED)
+             network: 'SEPOLIA',
+             abi: 'ProductiveMinerFixed.json', // Use the fixed version ABI
+             verified: true,
+             deploymentTx: '0x...', // Will be updated after verification
+             deployer: '0x9bEb6D047aB5126bF20D9BD0940e022628276ab4', // Deployer address
+             deploymentDate: '2025-01-13',
+             etherscanUrl: 'https://sepolia.etherscan.io/address/0xB576afEfB7C466B0146ee81A9256a3DE1ACF2146#code'
+           },
 
     // Legacy ProductiveMiner Contract (Local)
     PRODUCTIVE_MINER: {
       name: 'ProductiveMiner',
-      address: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+      address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Local development address
       network: 'LOCAL',
       abi: 'ProductiveMiner.json',
-      verified: false
+      verified: false,
+      note: 'Local development only - use PRODUCTIVE_MINER_FIXED for production'
     }
   },
 
   // Default Network (change this to SEPOLIA for production)
   DEFAULT_NETWORK: 'SEPOLIA',
+
+             // MINED Token Configuration - Asymptotic Model with Universal Multi-Chain Hooks
+         MINED_TOKEN: {
+           name: 'MINED',
+           symbol: 'MINED',
+           address: '0x82134Fb8350C522F50282fEde9c0fAd5F76d80ae', // Asymptotic MINED Token address
+           decimals: 18,
+           totalSupply: '1100000000000000000000000000', // 1.1 billion tokens in wei (includes all pools)
+           initialSupply: '1000000000000000000000000000', // 1 billion initial supply
+           asymptoticTarget: '1500000000000000000000000000', // 1.5 billion asymptotic target
+           network: 'SEPOLIA',
+           status: 'deployed_asymptotic_with_universal_multi_chain_hooks',
+           tokenomics: {
+             model: 'asymptotic',
+             equation: 'S(t) = S₀ + Σ(E(t) - B(t))',
+             emission: 'E(t) = E₀ × e^(-λt) × (1 + α × ResearchValue(t))',
+             deflationary: true,
+             researchBurns: true,
+             multiChainReady: true
+           }
+         },
 
   // Web3 Provider Configuration
   WEB3: {

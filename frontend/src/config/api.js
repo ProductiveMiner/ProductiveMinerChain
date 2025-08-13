@@ -1,30 +1,30 @@
 // ProductiveMiner API Configuration
-// Updated for AWS ECS deployment
+// Updated for AWS ECS deployment with proper domain URLs
 
 const API_CONFIG = {
-  // Backend API endpoints - Direct ECS service URLs
+  // Backend API endpoints - Using proper domain
   BACKEND_API: {
-    BASE_URL: process.env.REACT_APP_API_URL || '/api',
+    BASE_URL: process.env.REACT_APP_API_URL || 'https://api.productiveminer.org',
     ENDPOINTS: {
-      HEALTH: '/health',
-      USERS: '/users',
-      SESSIONS: '/sessions',
+      HEALTH: '/api/health',
+      USERS: '/api/users',
+      SESSIONS: '/api/sessions',
       // Mining endpoints
-      MINING_INFO: '/mining/info',
-      MINING_START: '/mining/start',
-      MINING_STOP: '/mining/stop',
-      WALLET: '/wallet',
-      VALIDATORS: '/validators',
-      RESEARCH: '/research',
-      EXPLORER: '/explorer',
-      STATS: '/stats',
-      CONTRACT: '/contract'
+      MINING_INFO: '/api/mining/info',
+      MINING_START: '/api/mining/start',
+      MINING_STOP: '/api/mining/stop',
+      WALLET: '/api/wallet',
+      VALIDATORS: '/api/validators',
+      RESEARCH: '/api/research',
+      EXPLORER: '/api/explorer',
+      STATS: '/api/stats',
+      CONTRACT: '/api/contract'
     }
   },
   
-  // Mathematical Engine endpoints - Direct ECS service URLs
+  // Mathematical Engine endpoints - Using proper domain
   MATHEMATICAL_ENGINE: {
-    BASE_URL: process.env.REACT_APP_MATH_ENGINE_URL || '/api/engine',
+    BASE_URL: process.env.REACT_APP_MATH_ENGINE_URL || 'https://api.productiveminer.org',
     ENDPOINTS: {
       HEALTH: '/health',
       ROOT: '/',
@@ -46,11 +46,11 @@ const API_CONFIG = {
     }
   },
   
-  // WebSocket configuration
+  // WebSocket configuration - Using proper domain
   WEBSOCKET: {
     URL: (typeof window !== 'undefined')
-      ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
-      : (process.env.REACT_APP_WS_URL || 'ws://localhost:3001/ws'),
+      ? `wss://api.productiveminer.org/ws`
+      : (process.env.REACT_APP_WS_URL || 'wss://api.productiveminer.org/ws'),
     RECONNECT_INTERVAL: 5000,
     MAX_RECONNECT_ATTEMPTS: 5
   },
@@ -67,7 +67,8 @@ const API_CONFIG = {
     NETWORK_ID: 11155111, // Sepolia Testnet
     CHAIN_ID: 11155111,
     RPC_URL: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Live Alchemy RPC URL
-    CONTRACT_ADDRESS: '0xc7374F27c695112B81495ECF28b90aD441CCf4b9', // Live deployed ProductiveMinerSecure contract
+    CONTRACT_ADDRESS: '0xB576afEfB7C466B0146ee81A9256a3DE1ACF2146', // ProductiveMinerFixed contract (CORRECTED)
+    TOKEN_ADDRESS: '0xC46C90F37B83868fA46A3653daf3C3b49a4f1604', // MINEDTokenFixed contract (CORRECTED)
     EXPLORER_URL: 'https://sepolia.etherscan.io'
   }
 };

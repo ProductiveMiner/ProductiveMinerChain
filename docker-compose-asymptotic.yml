@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # Hardhat Node for local blockchain
+  hardhat-node:
+    build:
+      context: ./contracts
+      dockerfile: Dockerfile
+    container_name: productiveminer-hardhat-node
+    ports:
+      - "8545:8545"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./contracts:/app
+      - hardhat-data:/app/data
+    command: npx hardhat node --hostname 0.0.0.0
+    networks:
+      - productiveminer-network
+
+  # Contract deployment service
+  contract-deployer:
+    build:
+      context: ./contracts
+      dockerfile: Dockerfile
+    container_name: productiveminer-contract-deployer
+    depends_on:
+      - hardhat-node
+    environment:
+      - NODE_ENV=development
+      - HARDHAT_NETWORK=localhost
+      - PRIVATE_KEY=${DEPLOYER_PRIVATE_KEY}
+    volumes:
+      - ./contracts:/app
+      - contract-artifacts:/app/artifacts
+      - contract-cache:/app/cache
+    command: >
+      sh -c "
+        echo 'Waiting for hardhat node to be ready...' &&
+        sleep 10 &&
+        echo 'Running deployment script...' &&
+        ./deploy.sh &&
+        echo 'Deployment completed successfully!'
+      "
+    networks:
+      - productiveminer-network
+
+  # Backend API server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: productiveminer-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - HARDHAT_NODE_URL=http://hardhat-node:8545
+      - MINED_TOKEN_ADDRESS=${MINED_TOKEN_ADDRESS}
+      - PRODUCTIVE_MINER_ADDRESS=${PRODUCTIVE_MINER_ADDRESS}
+      - ASYMPTOTIC_MODEL_ENABLED=true
+    volumes:
+      - ./backend:/app
+      - backend-logs:/app/logs
+    depends_on:
+      - hardhat-node
+      - contract-deployer
+      - database
+      - redis
+    networks:
+      - productiveminer-network
+
+  # Frontend React app
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: productiveminer-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001
+      - REACT_APP_HARDHAT_NODE_URL=http://localhost:8545
+      - REACT_APP_MINED_TOKEN_ADDRESS=${MINED_TOKEN_ADDRESS}
+      - REACT_APP_PRODUCTIVE_MINER_ADDRESS=${PRODUCTIVE_MINER_ADDRESS}
+      - REACT_APP_ASYMPTOTIC_MODEL_ENABLED=true
+      - REACT_APP_NETWORK=localhost
+    depends_on:
+      - backend
+    networks:
+      - productiveminer-network
+
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: productiveminer-database
+    environment:
+      - POSTGRES_DB=productiveminer
+      - POSTGRES_USER=${DB_USER:-productiveminer}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-productiveminer}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - productiveminer-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: productiveminer-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - productiveminer-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: productiveminer-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - productiveminer-network
+
+  # Monitoring and Analytics
+  monitoring:
+    image: grafana/grafana:latest
+    container_name: productiveminer-monitoring
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - productiveminer-network
+
+volumes:
+  hardhat-data:
+  contract-artifacts:
+  contract-cache:
+  postgres-data:
+  redis-data:
+  backend-logs:
+  grafana-data:
+
+networks:
+  productiveminer-network:
+    driver: bridge

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useWallet } from '../contexts/WalletContext';
+import web3Service from '../services/web3Service';
+import minedTokenService from '../services/minedTokenService';
+import CONTRACT_CONFIG from '../config/contracts';
 import { 
   FaWallet, 
   FaExchangeAlt, 
@@ -16,31 +18,34 @@ import {
   FaShieldAlt,
   FaRocket,
   FaPause,
-  FaPlay
+  FaPlay,
+  FaExclamationTriangle,
+  FaCheckCircle
 } from 'react-icons/fa';
 import './Wallet.css';
 
 const Wallet = () => {
-  const {
-    isConnected,
-    address,
-    balance,
-    transactions,
-    stakingInfo,
-    miningInfo,
-    loading,
-    error,
-    connectWallet,
-    disconnectWallet,
-    sendTransaction,
-    stakeTokens,
-    unstakeTokens,
-    claimRewards,
-    startMining,
-    stopMining,
-    refreshWalletData,
-    clearError,
-  } = useWallet();
+  const [isConnected, setIsConnected] = useState(false);
+  const [address, setAddress] = useState(null);
+  const [balance, setBalance] = useState(0);
+  const [minedBalance, setMinedBalance] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [stakingInfo, setStakingInfo] = useState({
+    staked: 0,
+    rewards: 0,
+    apy: 0,
+    validators: []
+  });
+  const [miningInfo, setMiningInfo] = useState({
+    isMining: false,
+    currentEngine: null,
+    hashrate: 0,
+    rewards: 0
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [contractInfo, setContractInfo] = useState(null);
+  const [minerStats, setMinerStats] = useState(null);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showSendModal, setShowSendModal] = useState(false);
@@ -55,37 +60,206 @@ const Wallet = () => {
     validatorAddress: '',
   });
 
+  // Refresh wallet data
+  const refreshWalletData = async () => {
+    try {
+      if (!web3Service.getCurrentAccount()) return;
+      
+      console.log('Refreshing wallet data...');
+      
+      // Refresh MINED token balance
+      const newMinedBalance = await minedTokenService.refreshBalance(web3Service.getCurrentAccount());
+      setMinedBalance(newMinedBalance);
+      console.log('Updated MINED token balance:', newMinedBalance);
+      
+      // Refresh miner stats
+      const stats = await web3Service.getMinerStats(web3Service.getCurrentAccount());
+      setMinerStats(stats);
+      
+      // Refresh staking info
+      const staking = await web3Service.getStakingInfo(web3Service.getCurrentAccount());
+      setStakingInfo({
+        staked: staking?.stakedAmount || 0,
+        rewards: staking?.rewards || 0,
+        apy: 0,
+        validators: []
+      });
+      
+    } catch (error) {
+      console.error('Error refreshing wallet data:', error);
+    }
+  };
+
+  // Initialize Web3 connection
+  useEffect(() => {
+    const initializeWeb3 = async () => {
+      try {
+        setLoading(true);
+        const connected = await web3Service.initialize();
+        if (connected) {
+          setIsConnected(true);
+          setAddress(web3Service.getCurrentAccount());
+          
+          // Get contract info
+          const info = await web3Service.getContractInfo();
+          setContractInfo(info);
+          
+          // Initialize MINED token service
+          await minedTokenService.initialize();
+          
+          // Get miner stats if account is available
+          if (web3Service.getCurrentAccount()) {
+            const stats = await web3Service.getMinerStats(web3Service.getCurrentAccount());
+            setMinerStats(stats);
+            
+            // Get staking info
+            const staking = await web3Service.getStakingInfo(web3Service.getCurrentAccount());
+            setStakingInfo({
+              staked: staking?.stakedAmount || 0,
+              rewards: staking?.rewards || 0,
+              apy: 0, // Would need to calculate from contract
+              validators: []
+            });
+            
+            // Get MINED token balance
+            const minedBal = await minedTokenService.getBalance(web3Service.getCurrentAccount());
+            setMinedBalance(minedBal);
+            console.log('Initial MINED token balance:', minedBal);
+          }
+          
+          // Setup listeners
+          web3Service.setupAccountListener((account) => {
+            setAddress(account);
+            if (account) {
+              web3Service.getMinerStats(account).then(setMinerStats);
+              web3Service.getStakingInfo(account).then((staking) => {
+                setStakingInfo({
+                  staked: staking?.stakedAmount || 0,
+                  rewards: staking?.rewards || 0,
+                  apy: 0,
+                  validators: []
+                });
+              });
+            }
+          });
+          
+          web3Service.setupNetworkListener((network) => {
+            console.log('Network changed:', network);
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initialize Web3:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeWeb3();
+  }, []);
+
   // Auto-refresh wallet data every 30 seconds
   useEffect(() => {
     if (isConnected) {
       const interval = setInterval(refreshWalletData, 30000);
       return () => clearInterval(interval);
     }
-  }, [isConnected, refreshWalletData]);
+  }, [isConnected]);
+
+  const connectWallet = async () => {
+    try {
+      setLoading(true);
+      const connected = await web3Service.initialize();
+      if (connected) {
+        setIsConnected(true);
+        setAddress(web3Service.getCurrentAccount());
+        setError(null);
+      }
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const disconnectWallet = () => {
+    web3Service.disconnect();
+    setIsConnected(false);
+    setAddress(null);
+    setBalance(0);
+    setTransactions([]);
+    setStakingInfo({ staked: 0, rewards: 0, apy: 0, validators: [] });
+    setMiningInfo({ isMining: false, currentEngine: null, hashrate: 0, rewards: 0 });
+    setContractInfo(null);
+    setMinerStats(null);
+    setError(null);
+  };
 
   const handleSendTransaction = async (e) => {
     e.preventDefault();
     try {
-      await sendTransaction({
-        to: sendForm.toAddress,
-        amount: parseFloat(sendForm.amount),
-        gasPrice: undefined
-      });
-      setShowSendModal(false);
-      setSendForm({ toAddress: '', amount: '', gasLimit: '21000' });
+      setLoading(true);
+      // This would need to be implemented based on your contract's transfer function
+      // For now, we'll just show an error
+      throw new Error('Transfer functionality not yet implemented');
     } catch (error) {
       console.error('Transaction failed:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleStakeTokens = async (e) => {
     e.preventDefault();
     try {
-      await stakeTokens({ amount: parseFloat(stakeForm.amount), validator: stakeForm.validatorAddress });
+      setLoading(true);
+      const amount = web3Service.web3.utils.toWei(stakeForm.amount, 'ether');
+      const result = await web3Service.stakeTokens(stakeForm.amount);
+      console.log('Staking successful:', result);
+      
+      // Refresh data
+      await refreshWalletData();
       setShowStakeModal(false);
       setStakeForm({ amount: '', validatorAddress: '' });
     } catch (error) {
       console.error('Staking failed:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnstakeTokens = async (amount) => {
+    try {
+      setLoading(true);
+      const weiAmount = web3Service.web3.utils.toWei(amount.toString(), 'ether');
+      const result = await web3Service.unstakeTokens(amount);
+      console.log('Unstaking successful:', result);
+      
+      // Refresh data
+      await refreshWalletData();
+    } catch (error) {
+      console.error('Unstaking failed:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClaimRewards = async () => {
+    try {
+      setLoading(true);
+      const result = await web3Service.claimRewards();
+      console.log('Claim rewards successful:', result);
+      
+      // Refresh data
+      await refreshWalletData();
+    } catch (error) {
+      console.error('Claim rewards failed:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,20 +268,29 @@ const Wallet = () => {
   };
 
   const formatAddress = (addr) => {
+    if (!addr) return '';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   const formatBalance = (balance) => {
-    return parseFloat(balance).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 6,
-    });
+    if (!balance) return '0 MINED';
+    return `${parseFloat(balance).toFixed(2)} MINED`;
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount) return '0 MINED';
+    return `${parseFloat(amount).toFixed(2)} MINED`;
+  };
+
+  const clearError = () => {
+    setError(null);
   };
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <FaWallet /> },
+    { id: 'mined-tokens', label: 'MINED Tokens', icon: <FaCoins /> },
     { id: 'transactions', label: 'Transactions', icon: <FaHistory /> },
-    { id: 'staking', label: 'Staking', icon: <FaCoins /> },
+    { id: 'staking', label: 'Staking', icon: <FaShieldAlt /> },
     { id: 'mining', label: 'Mining', icon: <FaRocket /> },
     { id: 'settings', label: 'Settings', icon: <FaCog /> },
   ];
@@ -165,100 +348,340 @@ const Wallet = () => {
   return (
     <div className="wallet">
       <div className="wallet-container">
-        {/* Wallet Header */}
+        {/* Web3 Connection Status */}
+        {!isConnected && (
+          <motion.div
+            className="web3-status-warning"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              background: 'linear-gradient(135deg, #ff6b6b, #feca57)',
+              color: 'white',
+              padding: '15px',
+              borderRadius: '10px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}
+          >
+            <FaExclamationTriangle style={{ marginRight: '10px' }} />
+            <strong>Wallet Not Connected</strong> - Please connect your MetaMask wallet to interact with the ProductiveMiner contract on Sepolia testnet.
+            <button 
+              onClick={connectWallet}
+              style={{
+                background: 'white',
+                color: '#ff6b6b',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '5px',
+                marginLeft: '10px',
+                cursor: 'pointer'
+              }}
+            >
+              Connect Wallet
+            </button>
+          </motion.div>
+        )}
+
+        {isConnected && (
+          <motion.div
+            className="web3-status-success"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              background: 'linear-gradient(135deg, #00b894, #00cec9)',
+              color: 'white',
+              padding: '15px',
+              borderRadius: '10px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}
+          >
+            <FaCheckCircle style={{ marginRight: '10px' }} />
+            <strong>Connected to Sepolia Testnet</strong> - Address: {formatAddress(address)} | Network: {web3Service.getCurrentNetwork()}
+            <button 
+              onClick={disconnectWallet}
+              style={{
+                background: 'white',
+                color: '#00b894',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '5px',
+                marginLeft: '10px',
+                cursor: 'pointer'
+              }}
+            >
+              Disconnect
+            </button>
+          </motion.div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <motion.div
+            className="error-message"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              background: 'linear-gradient(135deg, #ff6b6b, #ee5a52)',
+              color: 'white',
+              padding: '15px',
+              borderRadius: '10px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}
+          >
+            <FaExclamationTriangle style={{ marginRight: '10px' }} />
+            {error}
+            <button 
+              onClick={clearError}
+              style={{
+                background: 'white',
+                color: '#ff6b6b',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '3px',
+                marginLeft: '10px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              ×
+            </button>
+          </motion.div>
+        )}
+
+        {/* Header */}
         <motion.div
           className="wallet-header"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="wallet-info">
-            <h1>Wallet</h1>
-            <div className="address-info">
-                              <span className="address">{address ? formatAddress(address) : 'Not connected'}</span>
-              <button className="copy-btn" onClick={copyAddress}>
-                <FaCopy />
+          <div className="header-content">
+            <div className="header-left">
+              <h1>ProductiveMiner Wallet</h1>
+              <p>Manage your MINED tokens and interact with the ProductiveMiner contract</p>
+            </div>
+            <div className="header-right">
+              <button 
+                className="refresh-btn"
+                onClick={refreshWalletData}
+                disabled={loading}
+              >
+                <FaCog className={loading ? 'spinning' : ''} />
+                {loading ? 'Refreshing...' : 'Refresh'}
               </button>
             </div>
           </div>
-          <div className="wallet-actions">
-            <button className="btn btn-secondary" onClick={refreshWalletData}>
-              <FaDownload /> Refresh
-            </button>
-            <button className="btn btn-secondary" onClick={disconnectWallet}>
-              Disconnect
-            </button>
-          </div>
         </motion.div>
 
-        {/* Balance Cards */}
+        {/* Wallet Overview */}
         <motion.div
-          className="balance-cards"
+          className="wallet-overview"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <div className="balance-card">
-            <div className="balance-icon">
-              <FaCoins />
+          <div className="overview-grid">
+            <div className="overview-card">
+              <div className="card-icon">
+                <FaWallet />
+              </div>
+              <div className="card-content">
+                <h3>Wallet Address</h3>
+                <p className="address">{address ? formatAddress(address) : 'Not Connected'}</p>
+                {address && (
+                  <button className="copy-btn" onClick={copyAddress}>
+                    <FaCopy /> Copy
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="balance-info">
-              <h3>Available Balance</h3>
-                              <p className="balance-amount">{formatBalance(balance?.MINED || 0)} $MINED</p>
-                <p className="balance-usd">≈ ${formatBalance(balance?.USD || 0)} USD</p>
-            </div>
-          </div>
 
-          <div className="balance-card">
-            <div className="balance-icon">
-              <FaStickyNote />
+            <div className="overview-card">
+              <div className="card-icon">
+                <FaCoins />
+              </div>
+              <div className="card-content">
+                <h3>MINED Token Balance</h3>
+                <p className="balance">{minedTokenService.formatAmount(minedBalance)} MINED</p>
+                <p className="description">Your $MINED token balance</p>
+              </div>
             </div>
-            <div className="balance-info">
-              <h3>Staked Balance</h3>
-              <p className="balance-amount">{formatBalance(stakingInfo.staked)} $MINED</p>
-              <p className="balance-usd">Rewards: {formatBalance(stakingInfo.rewards)} $MINED</p>
-            </div>
-          </div>
 
-          <div className="balance-card">
-            <div className="balance-icon">
-              <FaRocket />
+            <div className="overview-card">
+              <div className="card-icon">
+                <FaChartLine />
+              </div>
+              <div className="card-content">
+                <h3>Total Rewards</h3>
+                <p className="balance">{formatBalance(minerStats?.totalRewards || 0)}</p>
+                <p className="description">Earned from mining</p>
+              </div>
             </div>
-            <div className="balance-info">
-              <h3>Mining Rewards</h3>
-              <p className="balance-amount">{formatBalance(miningInfo.rewards)} $MINED</p>
-              <p className="balance-usd">Hashrate: {miningInfo.hashrate} H/s</p>
+
+            <div className="overview-card">
+              <div className="card-icon">
+                <FaShieldAlt />
+              </div>
+              <div className="card-content">
+                <h3>Staked Amount</h3>
+                <p className="balance">{formatCurrency(stakingInfo.staked)}</p>
+                <p className="description">Currently staked</p>
+              </div>
+            </div>
+
+            <div className="overview-card">
+              <div className="card-icon">
+                <FaChartLine />
+              </div>
+              <div className="card-content">
+                <h3>Pending Rewards</h3>
+                <p className="balance">{formatCurrency(stakingInfo.rewards)}</p>
+                <p className="description">Available to claim</p>
+              </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Quick Actions */}
+        {/* Mining Statistics */}
+        {minerStats && (
+          <motion.div
+            className="mining-stats"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <h3>Mining Statistics</h3>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaRocket />
+                </div>
+                <div className="stat-content">
+                  <h4>Total Sessions</h4>
+                  <p className="stat-value">{minerStats.totalSessions || 0}</p>
+                  <p className="stat-description">Completed mining sessions</p>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaCoins />
+                </div>
+                <div className="stat-content">
+                  <h4>Total Discoveries</h4>
+                  <p className="stat-value">{minerStats.totalDiscoveries || 0}</p>
+                  <p className="stat-description">Mathematical breakthroughs</p>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaChartLine />
+                </div>
+                <div className="stat-content">
+                  <h4>Total Rewards</h4>
+                  <p className="stat-value">{formatCurrency(minerStats.totalRewards || 0)}</p>
+                  <p className="stat-description">Earned MINED tokens</p>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaShieldAlt />
+                </div>
+                <div className="stat-content">
+                  <h4>Staked Amount</h4>
+                  <p className="stat-value">{formatCurrency(minerStats.stakedAmount || 0)}</p>
+                  <p className="stat-description">Currently staked</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Action Buttons */}
         <motion.div
-          className="quick-actions"
+          className="wallet-actions"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <button className="action-btn" onClick={() => setShowSendModal(true)}>
-            <FaExchangeAlt />
-            <span>Send</span>
-          </button>
-          <button className="action-btn" onClick={() => setShowStakeModal(true)}>
-            <FaCoins />
-            <span>Stake</span>
-          </button>
-          <button className="action-btn" onClick={claimRewards}>
-            <FaChartLine />
-            <span>Claim Rewards</span>
-          </button>
-          <button 
-            className="action-btn"
-            onClick={() => miningInfo.isMining ? stopMining() : startMining('prime_pattern')}
-          >
-            {miningInfo.isMining ? <FaPause /> : <FaPlay />}
-            <span>{miningInfo.isMining ? 'Stop Mining' : 'Start Mining'}</span>
-          </button>
+          <div className="actions-grid">
+            <button
+              className="action-btn stake-btn"
+              onClick={() => setShowStakeModal(true)}
+              disabled={!isConnected || loading}
+            >
+              <FaShieldAlt />
+              Stake Tokens
+            </button>
+
+            {stakingInfo.staked > 0 && (
+              <button
+                className="action-btn unstake-btn"
+                onClick={() => handleUnstakeTokens(stakingInfo.staked)}
+                disabled={!isConnected || loading}
+              >
+                <FaDownload />
+                Unstake All
+              </button>
+            )}
+
+            {stakingInfo.rewards > 0 && (
+              <button
+                className="action-btn claim-btn"
+                onClick={handleClaimRewards}
+                disabled={!isConnected || loading}
+              >
+                <FaCoins />
+                Claim Rewards
+              </button>
+            )}
+
+            <button
+              className="action-btn refresh-btn"
+              onClick={refreshWalletData}
+              disabled={!isConnected || loading}
+            >
+              <FaCog />
+              Refresh Data
+            </button>
+          </div>
         </motion.div>
+
+        {/* Contract Information */}
+        {contractInfo && (
+          <motion.div
+            className="contract-info"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            <h3>Contract Information</h3>
+            <div className="contract-details">
+              <div className="contract-detail">
+                <strong>Contract Address:</strong> {formatAddress(contractInfo.address)}
+              </div>
+              <div className="contract-detail">
+                <strong>Owner:</strong> {formatAddress(contractInfo.owner)}
+              </div>
+              <div className="contract-detail">
+                <strong>Paused:</strong> {contractInfo.paused ? 'Yes' : 'No'}
+              </div>
+              <div className="contract-detail">
+                <strong>Max Difficulty:</strong> {contractInfo.maxDifficulty || 0}
+              </div>
+              <div className="contract-detail">
+                <strong>Base Reward:</strong> {formatCurrency(contractInfo.baseReward || 0)}
+              </div>
+              <div className="contract-detail">
+                <strong>Total Staked:</strong> {formatCurrency(contractInfo.totalStaked || 0)}
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Tab Navigation */}
         <motion.div
@@ -373,7 +796,7 @@ const Wallet = () => {
                 <button className="btn btn-primary" onClick={() => setShowStakeModal(true)}>
                   <FaCoins /> Stake Tokens
                 </button>
-                <button className="btn btn-secondary" onClick={claimRewards}>
+                <button className="btn btn-secondary" onClick={handleClaimRewards}>
                   <FaChartLine /> Claim Rewards
                 </button>
               </div>
@@ -431,6 +854,81 @@ const Wallet = () => {
                 <div className="mining-stat">
                   <h4>Mining Rewards</h4>
                   <p>{formatBalance(miningInfo?.rewards || 0)} $MINED</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'mined-tokens' && (
+            <div className="mined-tokens-tab">
+              <h3>MINED Token Management</h3>
+              <div className="token-overview">
+                <div className="token-balance-card">
+                  <h4>Your MINED Token Balance</h4>
+                  <div className="balance-display">
+                    <span className="balance-amount">{minedTokenService.formatAmount(minedBalance)}</span>
+                    <span className="balance-symbol">MINED</span>
+                  </div>
+                  <p className="balance-description">
+                    {minedTokenService.isTokenDeployed() 
+                      ? 'Your actual MINED token balance from the blockchain'
+                      : 'Mock balance for development (token not deployed yet)'
+                    }
+                  </p>
+                </div>
+
+                <div className="token-actions">
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => setShowSendModal(true)}
+                    disabled={!minedTokenService.isTokenDeployed()}
+                  >
+                    <FaExchangeAlt /> Send MINED Tokens
+                  </button>
+                  
+                  <button 
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      // Refresh MINED balance
+                      minedTokenService.getBalance(address).then(setMinedBalance);
+                    }}
+                  >
+                    <FaDownload /> Refresh Balance
+                  </button>
+                </div>
+
+                <div className="token-info">
+                  <h4>Token Information</h4>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <span>Token Name:</span>
+                      <span>MINED</span>
+                    </div>
+                    <div className="info-item">
+                      <span>Token Symbol:</span>
+                      <span>MINED</span>
+                    </div>
+                    <div className="info-item">
+                      <span>Decimals:</span>
+                      <span>18</span>
+                    </div>
+                    <div className="info-item">
+                      <span>Total Supply:</span>
+                      <span>1,000,000,000 MINED</span>
+                    </div>
+                    <div className="info-item">
+                      <span>Contract Address:</span>
+                      <span className="address">{CONTRACT_CONFIG.MINED_TOKEN.address}</span>
+                    </div>
+                    <div className="info-item">
+                      <span>Status:</span>
+                      <span className={`status ${minedTokenService.getTokenStatus()}`}>
+                        {minedTokenService.getTokenStatus() === 'connected' ? 'Connected' :
+                         minedTokenService.getTokenStatus() === 'deployed_not_connected' ? 'Deployed' :
+                         'Not Deployed'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -573,16 +1071,12 @@ const Wallet = () => {
           </div>
         )}
 
-        {/* Error Display */}
-        {error && (
-          <motion.div
-            className="error-banner"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <span>{error}</span>
-            <button onClick={clearError}>×</button>
-          </motion.div>
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="loading-overlay">
+            <div className="loading-spinner"></div>
+            <p>Processing...</p>
+          </div>
         )}
       </div>
     </div>

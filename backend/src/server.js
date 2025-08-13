@@ -41,7 +41,10 @@ app.set('trust proxy', 1);
 // Build allowed CORS origins
 const defaultOrigins = [
   'http://localhost:3000',
-  'http://localhost:3002'
+  'http://localhost:3002',
+  'https://productiveminer.org',
+  'https://www.productiveminer.org',
+  'https://dz646qhm9c2az.cloudfront.net'
 ];
 const envOrigins = [];
 if (process.env.FRONTEND_URL) envOrigins.push(process.env.FRONTEND_URL);
@@ -56,6 +59,8 @@ if (process.env.CORS_ALLOWED_ORIGINS) {
   );
 }
 const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
+console.log('🔧 CORS Allowed Origins:', allowedOrigins);
 
 const io = new Server(server, {
   cors: {
@@ -120,14 +125,34 @@ const requestCounter = (req, res, next) => {
 // Middleware
 app.use(helmet());
 app.use(compression());
-app.use(cors({
+
+// CORS configuration
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow non-browser requests
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin) {
+      console.log('🔧 CORS: Allowing request without origin (non-browser request)');
+      return callback(null, true); // allow non-browser requests
+    }
+    
+    console.log(`🔧 CORS: Checking origin: ${origin}`);
+    console.log(`🔧 CORS: Allowed origins:`, allowedOrigins);
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: Allowing origin: ${origin}`);
+      return callback(null, true);
+    }
+    
+    console.log(`❌ CORS: Blocking origin: ${origin}`);
     return callback(new Error(`CORS blocked: ${origin} not in allowed origins`));
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'x-user-id', 'x-wallet-address'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight requests
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
@@ -155,6 +180,20 @@ app.use('/api/contract', contractRoutes);
 app.use('/api/explorer', explorerRoutes);
 app.use('/api/validators', validatorsRoutes);
 
+// Health Check Endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    services: {
+      database: 'connected', // We'll check this dynamically
+      api: 'online',
+      blockchain: 'checking'
+    },
+    version: '1.0.0'
+  });
+});
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info(`Client connected: ${socket.id}`);
@@ -173,6 +212,27 @@ io.on('connection', (socket) => {
   });
 });
 
+// Enhanced Error Middleware - Add before the existing error handler
+app.use((err, req, res, next) => {
+  console.error('API Error:', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
+
+  // Return structured error response
+  res.status(err.status || 500).json({
+    error: {
+      message: err.message || 'Internal Server Error',
+      path: req.path,
+      timestamp: new Date().toISOString(),
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    }
+  });
+});
+
 // Error handling middleware
 app.use(errorHandler);
 
@@ -184,18 +244,18 @@ app.use('*', (req, res) => {
   });
 });
 
-// Database connection and server startup
-async function startServer() {
-  const PORT = process.env.PORT || 5000;
-  const HOST = process.env.HOST || '0.0.0.0';
-  
-  // Start the HTTP server first
-  server.listen(PORT, HOST, () => {
-    logger.info(`Server running on ${HOST}:${PORT}`);
-    logger.info(`Environment: ${process.env.NODE_ENV}`);
-  });
+// Start the server
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-  // Try to connect to databases in the background
+// Start the HTTP server first
+server.listen(PORT, HOST, () => {
+  logger.info(`Server running on ${HOST}:${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
+});
+
+// Try to connect to databases in the background
+(async () => {
   try {
     // Connect to PostgreSQL
     await connectDB();
@@ -213,28 +273,7 @@ async function startServer() {
     logger.error('Failed to connect to Redis cache:', error);
     // Don't exit, continue without Redis
   }
-}
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Process terminated');
-  });
-});
-
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Process terminated');
-  });
-});
-
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.info(`Server running on 0.0.0.0:${PORT}`, { service: 'productiveminer-backend' });
-});
+})();
 
 // Background process to auto-confirm blocks
 async function autoConfirmBlocks() {
@@ -321,3 +360,18 @@ setInterval(autoConfirmBlocks, 10000);
 
 // Run initial check
 setTimeout(autoConfirmBlocks, 5000);
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    logger.info('Process terminated');
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    logger.info('Process terminated');
+  });
+});

@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "./MINEDTokenAsymptoticEnhanced.sol";
+
 /**
- * @title ProductiveMiner
- * @dev A simplified blockchain mining platform for mathematical discovery
+ * @title ProductiveMiner (Asymptotic Integration)
+ * @dev Enhanced ProductiveMiner contract with asymptotic token integration
  * 
  * Features:
  * - Mathematical discovery mining with multiple work types
- * - Basic security and access control
- * - Session management
- * - Reward distribution
+ * - Asymptotic token emission integration
+ * - Research value tracking and contribution
+ * - Dynamic difficulty adjustment
+ * - Session management with token rewards
  * - Emergency controls
+ * - Integration with MINEDTokenAsymptotic
  */
-contract ProductiveMiner {
+contract ProductiveMinerAsymptotic {
     // =============================================================================
     // STRUCTS AND ENUMS
     // =============================================================================
@@ -39,12 +43,14 @@ contract ProductiveMiner {
         uint256 difficulty;
         uint256 quantumSecurityLevel;
         uint256 reward;
+        uint256 tokenReward;
         uint256 timestamp;
         bytes32 proofHash;
         bool verified;
         string metadata;
         uint256 computationalComplexity;
         uint256 impactScore;
+        uint256 researchValue;
     }
 
     struct MiningSession {
@@ -59,11 +65,13 @@ contract ProductiveMiner {
         bool completed;
         uint256 computationalPower;
         uint256 energyConsumption;
+        uint256 researchValue;
     }
 
     struct StakingInfo {
         uint256 stakedAmount;
         uint256 rewards;
+        uint256 tokenRewards;
         uint256 lastClaimTime;
         uint256 apy;
         bool isActive;
@@ -78,7 +86,10 @@ contract ProductiveMiner {
         uint256 quantumSecurityLevel;
         uint256 totalStaked;
         uint256 totalRewardsDistributed;
+        uint256 totalTokenRewardsDistributed;
         uint256 averageComputationalComplexity;
+        uint256 totalResearchValue;
+        uint256 currentBlockHeight;
     }
 
     // =============================================================================
@@ -92,7 +103,15 @@ contract ProductiveMiner {
     uint256 public minStakeAmount = 1000;
     uint256 public stakingAPY = 12; // 12% APY
     uint256 public maxConcurrentSessions = 10;
-    bool public tokenIntegrationEnabled = false;
+    bool public tokenIntegrationEnabled = true;
+
+    // Asymptotic token integration
+    MINEDTokenAsymptoticEnhanced public minedToken;
+    uint256 public currentBlockHeight = 1;
+    uint256 public totalResearchValue = 0;
+    
+    // Research value multipliers by work type
+    mapping(WorkType => uint256) public workTypeResearchMultipliers;
 
     // Access control
     address public owner;
@@ -110,19 +129,22 @@ contract ProductiveMiner {
     uint256 public sessionCounter = 0;
     uint256 public totalStaked = 0;
     uint256 public totalRewardsDistributed = 0;
+    uint256 public totalTokenRewardsDistributed = 0;
 
     // =============================================================================
     // EVENTS
     // =============================================================================
 
-    event DiscoverySubmitted(uint256 indexed discoveryId, address indexed miner, WorkType workType, uint256 difficulty);
+    event DiscoverySubmitted(uint256 indexed discoveryId, address indexed miner, WorkType workType, uint256 difficulty, uint256 researchValue);
     event MiningSessionStarted(uint256 indexed sessionId, address indexed miner, WorkType workType, uint256 difficulty);
-    event MiningSessionCompleted(uint256 indexed sessionId, address indexed miner, uint256 reward);
+    event MiningSessionCompleted(uint256 indexed sessionId, address indexed miner, uint256 reward, uint256 tokenReward);
     event Staked(address indexed staker, uint256 amount);
     event Unstaked(address indexed staker, uint256 amount);
-    event RewardsClaimed(address indexed staker, uint256 amount);
+    event RewardsClaimed(address indexed staker, uint256 amount, uint256 tokenAmount);
     event Paused(address indexed by);
     event Unpaused(address indexed by);
+    event TokenIntegrationEnabled(address indexed tokenAddress);
+    event ResearchValueAdded(uint256 indexed blockHeight, address indexed contributor, uint256 researchValue);
 
     // =============================================================================
     // MODIFIERS
@@ -138,14 +160,37 @@ contract ProductiveMiner {
         _;
     }
 
+    modifier whenTokenIntegrationEnabled() {
+        require(tokenIntegrationEnabled, "Token integration is disabled");
+        _;
+    }
+
     // =============================================================================
     // CONSTRUCTOR
     // =============================================================================
 
-    constructor(address _tokenAddress) {
+    constructor(address _minedTokenAddress) {
         owner = msg.sender;
-        // Token integration can be enabled later
-        tokenIntegrationEnabled = (_tokenAddress != address(0));
+        tokenIntegrationEnabled = (_minedTokenAddress != address(0));
+        
+        if (tokenIntegrationEnabled) {
+            minedToken = MINEDTokenAsymptoticEnhanced(_minedTokenAddress);
+            emit TokenIntegrationEnabled(_minedTokenAddress);
+        }
+        
+        // Initialize research value multipliers
+        workTypeResearchMultipliers[WorkType.PRIME_PATTERN_DISCOVERY] = 10;
+        workTypeResearchMultipliers[WorkType.RIEMANN_ZERO_COMPUTATION] = 50;
+        workTypeResearchMultipliers[WorkType.YANG_MILLS_FIELD_THEORY] = 40;
+        workTypeResearchMultipliers[WorkType.GOLDBACH_CONJECTURE_VERIFICATION] = 15;
+        workTypeResearchMultipliers[WorkType.NAVIER_STOKES_SIMULATION] = 30;
+        workTypeResearchMultipliers[WorkType.BIRCH_SWINNERTON_DYER] = 25;
+        workTypeResearchMultipliers[WorkType.ELLIPTIC_CURVE_CRYPTOGRAPHY] = 20;
+        workTypeResearchMultipliers[WorkType.LATTICE_CRYPTOGRAPHY] = 35;
+        workTypeResearchMultipliers[WorkType.POINCARE_CONJECTURE] = 60;
+        workTypeResearchMultipliers[WorkType.QUANTUM_ALGORITHM_OPTIMIZATION] = 45;
+        workTypeResearchMultipliers[WorkType.CRYPTOGRAPHIC_PROTOCOL_ANALYSIS] = 18;
+        workTypeResearchMultipliers[WorkType.MATHEMATICAL_CONSTANT_VERIFICATION] = 12;
     }
 
     // =============================================================================
@@ -174,6 +219,9 @@ contract ProductiveMiner {
         sessionCounter++;
         uint256 sessionId = sessionCounter;
 
+        // Calculate research value for this session
+        uint256 researchValue = calculateResearchValue(_workType, _difficulty, _difficulty * 100);
+
         sessions[sessionId] = MiningSession({
             sessionId: sessionId,
             miner: msg.sender,
@@ -185,7 +233,8 @@ contract ProductiveMiner {
             active: true,
             completed: false,
             computationalPower: _difficulty * 100,
-            energyConsumption: _difficulty * 10
+            energyConsumption: _difficulty * 10,
+            researchValue: researchValue
         });
 
         minerSessions[msg.sender].push(sessionId);
@@ -216,6 +265,7 @@ contract ProductiveMiner {
         // Calculate reward based on difficulty and time
         uint256 timeSpent = session.endTime - session.startTime;
         uint256 reward = calculateReward(session.difficulty, timeSpent);
+        uint256 tokenReward = 0;
 
         // Create discovery
         discoveryCounter++;
@@ -228,19 +278,89 @@ contract ProductiveMiner {
             difficulty: session.difficulty,
             quantumSecurityLevel: session.quantumSecurityLevel,
             reward: reward,
+            tokenReward: tokenReward,
             timestamp: block.timestamp,
             proofHash: _proofHash,
             verified: true, // Simplified - assume verified
             metadata: _metadata,
             computationalComplexity: session.computationalPower,
-            impactScore: calculateImpactScore(session.difficulty, session.workType)
+            impactScore: calculateImpactScore(session.difficulty, session.workType),
+            researchValue: session.researchValue
         });
 
         minerDiscoveries[msg.sender].push(discoveryId);
         totalRewardsDistributed += reward;
 
-        emit MiningSessionCompleted(_sessionId, msg.sender, reward);
-        emit DiscoverySubmitted(discoveryId, msg.sender, session.workType, session.difficulty);
+        // Handle token integration
+        if (tokenIntegrationEnabled) {
+            handleTokenRewards(msg.sender, session.researchValue, discoveryId);
+        }
+
+        emit MiningSessionCompleted(_sessionId, msg.sender, reward, tokenReward);
+        emit DiscoverySubmitted(discoveryId, msg.sender, session.workType, session.difficulty, session.researchValue);
+    }
+
+    // =============================================================================
+    // TOKEN INTEGRATION FUNCTIONS
+    // =============================================================================
+
+    /**
+     * @dev Handle token rewards for completed mining sessions
+     * @param _miner Address of the miner
+     * @param _researchValue Research value of the discovery
+     * @param _discoveryId ID of the discovery
+     */
+    function handleTokenRewards(address _miner, uint256 _researchValue, uint256 _discoveryId) internal {
+        // Increment block height
+        currentBlockHeight++;
+        
+        // Add research value to the token contract
+        minedToken.addResearchValue(currentBlockHeight, _researchValue, _miner);
+        
+        // Calculate token reward using asymptotic emission
+        uint256 tokenReward = minedToken.calculateAsymptoticEmission(currentBlockHeight, _researchValue);
+        
+        // Mint mining rewards using asymptotic emission with correct parameters
+        minedToken.mintMiningRewards(_miner, tokenReward, currentBlockHeight);
+        
+        // Update discovery with token reward
+        discoveries[_discoveryId].tokenReward = tokenReward;
+        totalTokenRewardsDistributed += tokenReward;
+        
+        // Update total research value
+        totalResearchValue += _researchValue;
+        
+        emit ResearchValueAdded(currentBlockHeight, _miner, _researchValue);
+    }
+
+    /**
+     * @dev Claim staking rewards with token integration
+     */
+    function claimStakingRewards() external whenNotPaused whenTokenIntegrationEnabled {
+        StakingInfo storage staker = stakingInfo[msg.sender];
+        require(staker.isActive, "Not staking");
+        
+        uint256 totalRewards = staker.rewards + calculatePendingRewards(msg.sender);
+        uint256 totalTokenRewards = staker.tokenRewards + calculatePendingTokenRewards(msg.sender);
+        
+        require(totalRewards > 0 || totalTokenRewards > 0, "No rewards to claim");
+        
+        staker.rewards = 0;
+        staker.tokenRewards = 0;
+        staker.lastClaimTime = block.timestamp;
+        
+        // Transfer ETH rewards
+        if (totalRewards > 0) {
+            payable(msg.sender).transfer(totalRewards);
+        }
+        
+        // Mint token rewards
+        if (totalTokenRewards > 0) {
+            currentBlockHeight++;
+            minedToken.mintStakingRewards(msg.sender, totalTokenRewards);
+        }
+        
+        emit RewardsClaimed(msg.sender, totalRewards, totalTokenRewards);
     }
 
     // =============================================================================
@@ -258,7 +378,9 @@ contract ProductiveMiner {
         if (staker.isActive) {
             // Calculate and add pending rewards
             uint256 pendingRewards = calculatePendingRewards(msg.sender);
+            uint256 pendingTokenRewards = calculatePendingTokenRewards(msg.sender);
             staker.rewards += pendingRewards;
+            staker.tokenRewards += pendingTokenRewards;
         }
         
         staker.stakedAmount += msg.value;
@@ -282,7 +404,9 @@ contract ProductiveMiner {
         
         // Calculate and add pending rewards
         uint256 pendingRewards = calculatePendingRewards(msg.sender);
+        uint256 pendingTokenRewards = calculatePendingTokenRewards(msg.sender);
         staker.rewards += pendingRewards;
+        staker.tokenRewards += pendingTokenRewards;
         
         staker.stakedAmount -= _amount;
         totalStaked -= _amount;
@@ -296,30 +420,12 @@ contract ProductiveMiner {
         emit Unstaked(msg.sender, _amount);
     }
 
-    /**
-     * @dev Claim staking rewards
-     */
-    function claimRewards() external whenNotPaused {
-        StakingInfo storage staker = stakingInfo[msg.sender];
-        require(staker.isActive, "Not staking");
-        
-        uint256 totalRewards = staker.rewards + calculatePendingRewards(msg.sender);
-        require(totalRewards > 0, "No rewards to claim");
-        
-        staker.rewards = 0;
-        staker.lastClaimTime = block.timestamp;
-        
-        payable(msg.sender).transfer(totalRewards);
-        
-        emit RewardsClaimed(msg.sender, totalRewards);
-    }
-
     // =============================================================================
     // VIEW FUNCTIONS
     // =============================================================================
 
     /**
-     * @dev Get network statistics
+     * @dev Get network statistics with token integration
      */
     function getNetworkStats() external view returns (NetworkStats memory) {
         uint256 activeSessions = 0;
@@ -341,33 +447,46 @@ contract ProductiveMiner {
             quantumSecurityLevel: quantumSecurityLevel,
             totalStaked: totalStaked,
             totalRewardsDistributed: totalRewardsDistributed,
-            averageComputationalComplexity: sessionCounter > 0 ? totalComplexity / sessionCounter : 0
+            totalTokenRewardsDistributed: totalTokenRewardsDistributed,
+            averageComputationalComplexity: sessionCounter > 0 ? totalComplexity / sessionCounter : 0,
+            totalResearchValue: totalResearchValue,
+            currentBlockHeight: currentBlockHeight
         });
     }
 
     /**
-     * @dev Get miner statistics
+     * @dev Get miner statistics with token integration
      * @param _miner Address of the miner
      */
     function getMinerStats(address _miner) external view returns (
         uint256 totalSessions,
         uint256 totalDiscoveries,
         uint256 totalRewards,
+        uint256 totalTokenRewards,
         uint256 stakedAmount,
-        uint256 pendingRewards
+        uint256 pendingRewards,
+        uint256 pendingTokenRewards,
+        uint256 researchContributions
     ) {
         totalSessions = minerSessions[_miner].length;
         totalDiscoveries = minerDiscoveries[_miner].length;
         
         // Calculate total rewards from discoveries
         totalRewards = 0;
+        totalTokenRewards = 0;
         for (uint256 i = 0; i < minerDiscoveries[_miner].length; i++) {
             uint256 discoveryId = minerDiscoveries[_miner][i];
             totalRewards += discoveries[discoveryId].reward;
+            totalTokenRewards += discoveries[discoveryId].tokenReward;
         }
         
         stakedAmount = stakingInfo[_miner].stakedAmount;
         pendingRewards = calculatePendingRewards(_miner);
+        pendingTokenRewards = calculatePendingTokenRewards(_miner);
+        
+        if (tokenIntegrationEnabled) {
+            researchContributions = minedToken.getUserResearchContributions(_miner);
+        }
     }
 
     // =============================================================================
@@ -416,6 +535,20 @@ contract ProductiveMiner {
         stakingAPY = _stakingAPY;
     }
 
+    /**
+     * @dev Update token integration
+     * @param _tokenAddress New token contract address
+     */
+    function updateTokenIntegration(address _tokenAddress) external onlyOwner {
+        if (_tokenAddress == address(0)) {
+            tokenIntegrationEnabled = false;
+        } else {
+            minedToken = MINEDTokenAsymptoticEnhanced(_tokenAddress);
+            tokenIntegrationEnabled = true;
+            emit TokenIntegrationEnabled(_tokenAddress);
+        }
+    }
+
     // =============================================================================
     // INTERNAL FUNCTIONS
     // =============================================================================
@@ -427,6 +560,15 @@ contract ProductiveMiner {
         uint256 baseRewardAmount = baseReward * _difficulty / 1000;
         uint256 timeMultiplier = _timeSpent > 3600 ? 2 : 1; // Bonus for sessions > 1 hour
         return baseRewardAmount * timeMultiplier;
+    }
+
+    /**
+     * @dev Calculate research value based on work type and difficulty
+     */
+    function calculateResearchValue(WorkType _workType, uint256 _difficulty, uint256 _complexity) internal view returns (uint256) {
+        uint256 baseValue = _difficulty * _complexity / 1000;
+        uint256 multiplier = workTypeResearchMultipliers[_workType];
+        return baseValue * multiplier;
     }
 
     /**
@@ -450,6 +592,25 @@ contract ProductiveMiner {
         uint256 timeStaked = block.timestamp - staker.lastClaimTime;
         uint256 annualReward = staker.stakedAmount * staker.apy / 100;
         return annualReward * timeStaked / 365 days;
+    }
+
+    /**
+     * @dev Calculate pending token rewards for a staker
+     */
+    function calculatePendingTokenRewards(address _staker) internal view returns (uint256) {
+        if (!tokenIntegrationEnabled) {
+            return 0;
+        }
+        
+        StakingInfo storage staker = stakingInfo[_staker];
+        if (!staker.isActive || staker.stakedAmount == 0) {
+            return 0;
+        }
+        
+        // Calculate token rewards based on staking amount and time
+        uint256 timeStaked = block.timestamp - staker.lastClaimTime;
+        uint256 annualTokenReward = staker.stakedAmount * 50 / 10000; // 0.5% annual token reward
+        return annualTokenReward * timeStaked / 365 days;
     }
 
     // =============================================================================

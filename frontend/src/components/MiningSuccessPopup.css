@@ -331,6 +331,61 @@
   animation: rotate 3s linear infinite;
 }
 
+/* MINED Token Rewards Section */
+.token-rewards-section {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  border: 2px solid #f7b267;
+  border-radius: 15px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.token-rewards-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.token-icon {
+  font-size: 1.5rem;
+}
+
+.token-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.token-rewards-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.token-reward-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.token-reward-item:last-child {
+  border-bottom: none;
+}
+
+.token-label {
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.token-value {
+  font-weight: 700;
+  color: #e53e3e;
+  font-size: 1.1rem;
+}
+
 @keyframes rotate {
   0% {
     transform: rotate(0deg);

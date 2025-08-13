@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../database/connection');
+const { query, safeQuery, isDatabaseAvailable } = require('../database/connection');
 const { get, hgetall } = require('../database/redis');
 const { asyncHandler, NotFoundError } = require('../middleware/errorHandler');
 const { requireAdmin } = require('../middleware/auth');
@@ -26,75 +26,127 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Get system overview statistics
 router.get('/overview', asyncHandler(async (req, res) => {
-  // Get user statistics
-  const userStats = await query(`
-    SELECT 
-      COUNT(*) as total_users,
-      COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
-      COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_users_week,
-      COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_users_month
-    FROM users
-  `);
+  // Check if database is available first
+  const dbAvailable = await isDatabaseAvailable();
+  
+  if (!dbAvailable) {
+    logger.warn('Database not available, returning fallback data for overview');
+    return res.json({
+      users: {
+        total: 0,
+        active: 0,
+        newThisWeek: 0,
+        newThisMonth: 0
+      },
+      mining: {
+        totalSessions: 0,
+        completedSessions: 0,
+        stoppedSessions: 0,
+        totalMiningTime: 0,
+        totalCoinsEarned: 0,
+        avgDifficulty: 0,
+        avgSessionDuration: 0
+      },
+      recentActivity: [],
+      redis: {},
+      note: "Database temporarily unavailable - showing fallback data"
+    });
+  }
 
-  // Get mining statistics
-  const miningStats = await query(`
-    SELECT 
-      COUNT(*) as total_sessions,
-      COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
-      COUNT(CASE WHEN status = 'stopped' THEN 1 END) as stopped_sessions,
-      SUM(duration) as total_mining_time,
-      SUM(coins_earned) as total_coins_earned,
-      AVG(difficulty) as avg_difficulty,
-      AVG(duration) as avg_session_duration
-    FROM mining_sessions
-  `);
+  try {
+    // Get user statistics
+    const userStats = await safeQuery(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
+        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_users_week,
+        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_users_month
+      FROM users
+    `, [], { rows: [{ total_users: 0, active_users: 0, new_users_week: 0, new_users_month: 0 }] });
 
-  // Get recent activity
-  const recentActivity = await query(`
-    SELECT 
-      'user_registration' as type,
-      u.username,
-      u.created_at as timestamp
-    FROM users u
-    WHERE u.created_at >= NOW() - INTERVAL '7 days'
-    UNION ALL
-    SELECT 
-      'mining_session' as type,
-      u.username,
-      ms.created_at as timestamp
-    FROM mining_sessions ms
-    JOIN users u ON ms.user_id = u.id
-    WHERE ms.created_at >= NOW() - INTERVAL '7 days'
-    ORDER BY timestamp DESC
-    LIMIT 20
-  `);
+    // Get mining statistics
+    const miningStats = await safeQuery(`
+      SELECT 
+        COUNT(*) as total_sessions,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
+        COUNT(CASE WHEN status = 'stopped' THEN 1 END) as stopped_sessions,
+        SUM(duration) as total_mining_time,
+        SUM(coins_earned) as total_coins_earned,
+        AVG(difficulty) as avg_difficulty,
+        AVG(duration) as avg_session_duration
+      FROM mining_sessions
+    `, [], { rows: [{ total_sessions: 0, completed_sessions: 0, stopped_sessions: 0, total_mining_time: 0, total_coins_earned: 0, avg_difficulty: 0, avg_session_duration: 0 }] });
 
-  // Get Redis statistics
-  const redisStats = await get('system_stats') || {};
+    // Get recent activity
+    const recentActivity = await safeQuery(`
+      SELECT 
+        'user_registration' as type,
+        u.username,
+        u.created_at as timestamp
+      FROM users u
+      WHERE u.created_at >= NOW() - INTERVAL '7 days'
+      UNION ALL
+      SELECT 
+        'mining_session' as type,
+        u.username,
+        ms.created_at as timestamp
+      FROM mining_sessions ms
+      JOIN users u ON ms.user_id = u.id
+      WHERE ms.created_at >= NOW() - INTERVAL '7 days'
+      ORDER BY timestamp DESC
+      LIMIT 20
+    `, [], { rows: [] });
 
-  res.json({
-    users: userStats.rows[0] ? {
-      total: parseInt(userStats.rows[0].total_users),
-      active: parseInt(userStats.rows[0].active_users),
-      newThisWeek: parseInt(userStats.rows[0].new_users_week),
-      newThisMonth: parseInt(userStats.rows[0].new_users_month)
-    } : null,
-    mining: miningStats.rows[0] ? {
-      totalSessions: parseInt(miningStats.rows[0].total_sessions || 0),
-      completedSessions: parseInt(miningStats.rows[0].completed_sessions || 0),
-      stoppedSessions: parseInt(miningStats.rows[0].stopped_sessions || 0),
-      totalMiningTime: parseInt(miningStats.rows[0].total_mining_time || 0),
-      totalCoinsEarned: parseInt(miningStats.rows[0].total_coins_earned || 0),
-      avgDifficulty: parseFloat(miningStats.rows[0].avg_difficulty || 0),
-      avgSessionDuration: parseFloat(miningStats.rows[0].avg_session_duration || 0)
-    } : null,
-    recentActivity: recentActivity.rows.map(activity => ({
-      type: activity.type,
-      username: activity.username,
-      timestamp: activity.timestamp
-    })),
-    redis: redisStats
-  });
+    // Get Redis statistics
+    const redisStats = await get('system_stats') || {};
+
+    res.json({
+      users: {
+        total: parseInt(userStats.rows[0].total_users),
+        active: parseInt(userStats.rows[0].active_users),
+        newThisWeek: parseInt(userStats.rows[0].new_users_week),
+        newThisMonth: parseInt(userStats.rows[0].new_users_month)
+      },
+      mining: {
+        totalSessions: parseInt(miningStats.rows[0].total_sessions || 0),
+        completedSessions: parseInt(miningStats.rows[0].completed_sessions || 0),
+        stoppedSessions: parseInt(miningStats.rows[0].stopped_sessions || 0),
+        totalMiningTime: parseInt(miningStats.rows[0].total_mining_time || 0),
+        totalCoinsEarned: parseInt(miningStats.rows[0].total_coins_earned || 0),
+        avgDifficulty: parseFloat(miningStats.rows[0].avg_difficulty || 0),
+        avgSessionDuration: parseFloat(miningStats.rows[0].avg_session_duration || 0)
+      },
+      recentActivity: recentActivity.rows.map(activity => ({
+        type: activity.type,
+        username: activity.username,
+        timestamp: activity.timestamp
+      })),
+      redis: redisStats
+    });
+  } catch (error) {
+    logger.error('Unexpected error in stats overview:', error);
+    // Return fallback data when database is unavailable
+    res.json({
+      users: {
+        total: 0,
+        active: 0,
+        newThisWeek: 0,
+        newThisMonth: 0
+      },
+      mining: {
+        totalSessions: 0,
+        completedSessions: 0,
+        stoppedSessions: 0,
+        totalMiningTime: 0,
+        totalCoinsEarned: 0,
+        avgDifficulty: 0,
+        avgSessionDuration: 0
+      },
+      recentActivity: [],
+      redis: {},
+      note: "Database temporarily unavailable - showing fallback data"
+    });
+  }
 }));
 
 // Get detailed mining statistics
@@ -345,6 +397,132 @@ router.get('/realtime', asyncHandler(async (req, res) => {
     recentEvents,
     timestamp: new Date().toISOString()
   });
+}));
+
+// Get dashboard data - Combined endpoint for frontend
+router.get('/dashboard', asyncHandler(async (req, res) => {
+  // Check if database is available first
+  const dbAvailable = await isDatabaseAvailable();
+  
+  if (!dbAvailable) {
+    logger.warn('Database not available, returning fallback data');
+    return res.json({
+      users: {
+        total: 0,
+        active: 0,
+        newThisWeek: 0,
+        newThisMonth: 0
+      },
+      mining: {
+        totalSessions: 0,
+        completedSessions: 0,
+        stoppedSessions: 0,
+        totalMiningTime: 0,
+        totalCoinsEarned: 0,
+        avgDifficulty: 0,
+        avgSessionDuration: 0
+      },
+      activeMiners: 0,
+      research: {
+        totalPapers: 0,
+        totalDiscoveries: 0,
+        totalCitations: 0,
+        avgComplexity: 0
+      },
+      redis: {},
+      note: "Database temporarily unavailable - showing fallback data"
+    });
+  }
+
+  try {
+    // Get user statistics
+    const userStats = await safeQuery(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
+        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_users_week,
+        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_users_month
+      FROM users
+    `, [], { rows: [{ total_users: 0, active_users: 0, new_users_week: 0, new_users_month: 0 }] });
+
+    // Get mining statistics
+    const miningStats = await safeQuery(`
+      SELECT 
+        COUNT(*) as total_sessions,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
+        COUNT(CASE WHEN status = 'stopped' THEN 1 END) as stopped_sessions,
+        SUM(duration) as total_mining_time,
+        SUM(coins_earned) as total_coins_earned,
+        AVG(difficulty) as avg_difficulty,
+        AVG(duration) as avg_session_duration
+      FROM mining_sessions
+    `, [], { rows: [{ total_sessions: 0, completed_sessions: 0, stopped_sessions: 0, total_mining_time: 0, total_coins_earned: 0, avg_difficulty: 0, avg_session_duration: 0 }] });
+
+    // Get active miners (users with recent mining activity)
+    const activeMiners = await safeQuery(`
+      SELECT COUNT(DISTINCT user_id) as active_miners
+      FROM mining_sessions 
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+    `, [], { rows: [{ active_miners: 0 }] });
+
+    // Get Redis statistics
+    const redisStats = await get('system_stats') || {};
+
+    res.json({
+      users: {
+        total: parseInt(userStats.rows[0].total_users),
+        active: parseInt(userStats.rows[0].active_users),
+        newThisWeek: parseInt(userStats.rows[0].new_users_week),
+        newThisMonth: parseInt(userStats.rows[0].new_users_month)
+      },
+      mining: {
+        totalSessions: parseInt(miningStats.rows[0].total_sessions || 0),
+        completedSessions: parseInt(miningStats.rows[0].completed_sessions || 0),
+        stoppedSessions: parseInt(miningStats.rows[0].stopped_sessions || 0),
+        totalMiningTime: parseInt(miningStats.rows[0].total_mining_time || 0),
+        totalCoinsEarned: parseInt(miningStats.rows[0].total_coins_earned || 0),
+        avgDifficulty: parseFloat(miningStats.rows[0].avg_difficulty || 0),
+        avgSessionDuration: parseFloat(miningStats.rows[0].avg_session_duration || 0)
+      },
+      activeMiners: parseInt(activeMiners.rows[0].active_miners),
+      research: {
+        totalPapers: 0,
+        totalDiscoveries: 0,
+        totalCitations: 0,
+        avgComplexity: 0
+      },
+      redis: redisStats
+    });
+  } catch (error) {
+    logger.error('Unexpected error in dashboard stats:', error);
+    // Return comprehensive fallback data when database is unavailable
+    res.json({
+      users: {
+        total: 0,
+        active: 0,
+        newThisWeek: 0,
+        newThisMonth: 0
+      },
+      mining: {
+        totalSessions: 0,
+        completedSessions: 0,
+        stoppedSessions: 0,
+        totalMiningTime: 0,
+        totalCoinsEarned: 0,
+        avgDifficulty: 0,
+        avgSessionDuration: 0
+      },
+      activeMiners: 0,
+      research: {
+        totalPapers: 0,
+        totalDiscoveries: 0,
+        totalCitations: 0,
+        avgComplexity: 0
+      },
+      redis: {},
+      note: "Database temporarily unavailable - showing fallback data"
+    });
+  }
 }));
 
 module.exports = router;

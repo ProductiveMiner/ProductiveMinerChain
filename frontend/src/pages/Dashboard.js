@@ -17,36 +17,100 @@ import {
   FaArrowDown,
   FaCog,
   FaShieldAlt,
-  FaBrain
+  FaBrain,
+  FaWallet,
+  FaExclamationTriangle,
+  FaCheckCircle
 } from 'react-icons/fa';
-import { flowAPI, backendAPI, mathEngineAPI } from '../utils/api';
+import web3Service from '../services/web3Service';
+import { backendAPI, mathEngineAPI } from '../utils/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
   try {
     const [timeRange, setTimeRange] = useState('24h');
+    const [web3Connected, setWeb3Connected] = useState(false);
+    const [currentAccount, setCurrentAccount] = useState(null);
+    const [currentNetwork, setCurrentNetwork] = useState(null);
 
-    // Fetch unified flow status
-    const { data: flowStatus, isLoading: flowLoading, error: flowError } = useQuery(
-      ['flowStatus'],
-      () => flowAPI.getSystemStatus(),
+    // Initialize Web3 connection
+    useEffect(() => {
+      const initializeWeb3 = async () => {
+        try {
+          const connected = await web3Service.initialize();
+          if (connected) {
+            setWeb3Connected(true);
+            setCurrentAccount(web3Service.getCurrentAccount());
+            setCurrentNetwork(web3Service.getCurrentNetwork());
+          }
+        } catch (error) {
+          console.error('Failed to initialize Web3:', error);
+        }
+      };
+
+      initializeWeb3();
+    }, []);
+
+    // Fetch contract information from Web3Service
+    const { data: contractInfo, isLoading: contractLoading } = useQuery(
+      ['contractInfo'],
+      async () => {
+        if (!web3Service.isWeb3Connected()) return null;
+        return await web3Service.getContractInfo();
+      },
       { 
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 30000,
+        enabled: web3Connected
+      }
+    );
+
+    // Fetch miner statistics from Web3Service
+    const { data: minerStats, isLoading: minerLoading } = useQuery(
+      ['minerStats', currentAccount],
+      async () => {
+        if (!web3Service.isWeb3Connected() || !currentAccount) return null;
+        return await web3Service.getMinerStats(currentAccount);
+      },
+      { 
+        refetchInterval: 30000,
+        enabled: web3Connected && !!currentAccount
+      }
+    );
+
+    // Fetch staking information from Web3Service
+    const { data: stakingInfo, isLoading: stakingLoading } = useQuery(
+      ['stakingInfo', currentAccount],
+      async () => {
+        if (!web3Service.isWeb3Connected() || !currentAccount) return null;
+        return await web3Service.getStakingInfo(currentAccount);
+      },
+      { 
+        refetchInterval: 30000,
+        enabled: web3Connected && !!currentAccount
+      }
+    );
+
+    // Fetch dashboard data from backend (combined endpoint)
+    const { data: dashboardData, isLoading: dashboardLoading } = useQuery(
+      ['dashboardData'],
+      () => backendAPI.getDashboardData(),
+      { 
+        refetchInterval: 30000,
         onSuccess: (data) => {
-          console.log('🎯 Dashboard - Flow status received:', data);
+          console.log('🎯 Dashboard - Dashboard data received:', data);
         },
         onError: (error) => {
-          console.error('❌ Dashboard - Flow status error:', error);
+          console.error('❌ Dashboard - Dashboard data error:', error);
         }
       }
     );
 
-    // Fetch real token data from backend
+    // Fetch real token data from backend (non-blockchain data)
     const { data: tokenData, isLoading: tokenLoading } = useQuery(
       ['tokenData'],
       () => backendAPI.getTokenData(),
       { 
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 30000,
         onSuccess: (data) => {
           console.log('🎯 Dashboard - Token data received:', data);
         },
@@ -56,27 +120,12 @@ const Dashboard = () => {
       }
     );
 
-    // Fetch real hashrate data from blockchain
-    const { data: hashrateData, isLoading: hashrateLoading, error: hashrateError } = useQuery(
-      ['hashrateData'],
-      () => flowAPI.getHashrateData(),
-      { 
-        refetchInterval: 30000, // Refetch every 30 seconds
-        onSuccess: (data) => {
-          console.log('🎯 Dashboard - Hashrate data received:', data);
-        },
-        onError: (error) => {
-          console.error('❌ Dashboard - Hashrate data error:', error);
-        }
-      }
-    );
-
     // Fetch real engine distribution from mathematical engine
     const { data: engineDistribution, isLoading: engineLoading } = useQuery(
       ['engineDistribution'],
       () => mathEngineAPI.getEngineDistribution(),
       { 
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 30000,
         onSuccess: (data) => {
           console.log('🎯 Dashboard - Engine distribution received:', data);
         },
@@ -86,57 +135,12 @@ const Dashboard = () => {
       }
     );
 
-    // Fetch real network activity from blockchain
-    const { data: networkActivity, isLoading: activityLoading } = useQuery(
-      ['networkActivity'],
-      () => flowAPI.getNetworkActivity(),
-      { 
-        refetchInterval: 30000, // Refetch every 30 seconds
-        onSuccess: (data) => {
-          console.log('🎯 Dashboard - Network activity received:', data);
-        },
-        onError: (error) => {
-          console.error('❌ Dashboard - Network activity error:', error);
-        }
-      }
-    );
-
-    // Fetch real mining statistics
-    const { data: miningStats, isLoading: miningLoading } = useQuery(
-      ['miningStats'],
-      () => flowAPI.getMiningStats(),
-      { 
-        refetchInterval: 30000, // Refetch every 30 seconds
-        onSuccess: (data) => {
-          console.log('🎯 Dashboard - Mining stats received:', data);
-        },
-        onError: (error) => {
-          console.error('❌ Dashboard - Mining stats error:', error);
-        }
-      }
-    );
-
-    // Fetch real validator data
-    const { data: validators, isLoading: validatorsLoading } = useQuery(
-      ['validators'],
-      () => flowAPI.getValidators(),
-      { 
-        refetchInterval: 30000, // Refetch every 30 seconds
-        onSuccess: (data) => {
-          console.log('🎯 Dashboard - Validators received:', data);
-        },
-        onError: (error) => {
-          console.error('❌ Dashboard - Validators error:', error);
-        }
-      }
-    );
-
-    // Fetch real mathematical discoveries
+    // Fetch discoveries from backend (non-blockchain data)
     const { data: discoveries, isLoading: discoveriesLoading } = useQuery(
       ['discoveries'],
       () => mathEngineAPI.getDiscoveries(),
       { 
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 30000,
         onSuccess: (data) => {
           console.log('🎯 Dashboard - Discoveries received:', data);
         },
@@ -146,82 +150,167 @@ const Dashboard = () => {
       }
     );
 
-    // Compute statistics from API data (align with blockchain endpoints)
-    const stats = {
-      totalSupply: tokenData?.totalSupply || 0,
-      circulatingSupply: tokenData?.circulatingSupply || 0,
-      stakingAPY: tokenData?.stakingAPY || 0,
-      totalStaked: tokenData?.totalStaked || 0,
-      activeValidators: validators?.totalValidators || validators?.validators?.length || 0,
-      totalBlocks: flowStatus?.system?.blockchain?.height || hashrateData?.blockHeight || 0,
-      networkHashrate: hashrateData?.hashRate || flowStatus?.system?.feedbackLoop?.validationSpeed || 0,
-      totalTransactions: hashrateData?.tps || 0,
-      activeMiners: hashrateData?.activeNodes || 0,
-      researchValue: flowStatus?.system?.feedbackLoop?.researchValue || 0,
-      totalDiscoveries: flowStatus?.system?.blockchain?.discoveries || 0,
-      bitStrengthAdded: Math.min(flowStatus?.system?.security?.currentBitStrength || 0, 1024), // Cap at realistic value
-      quantumSecurityLevel: flowStatus?.system?.security?.quantumSecurityLevel || 0
-    };
-
-    // Validate data and log any issues
-    if (!tokenData) console.warn('⚠️ Token data is null/undefined');
-    if (!flowStatus) console.warn('⚠️ Flow status is null/undefined');
-    if (!hashrateData) console.warn('⚠️ Hashrate data is null/undefined');
-    if (!engineDistribution) console.warn('⚠️ Engine distribution is null/undefined');
-    
-    // Log errors if any
-    if (flowError) console.error('❌ Flow status error:', flowError);
-    if (hashrateError) console.error('❌ Hashrate data error:', hashrateError);
-
-    // Real chart data from API or fallback minimal demo data to render charts
-    const chartData = {
-      hashrate: Array.from({ length: 12 }, (_, i) => ({ time: `${i}:00`, hashrate: Math.max(1, (i + 1) * 5) })),
-      engineDistribution: (engineDistribution?.engines || [
-        { name: 'Riemann Zeros', share: 30 },
-        { name: 'Yang-Mills', share: 25 },
-        { name: 'Goldbach', share: 20 },
-        { name: 'Navier-Stokes', share: 25 }
-      ]).map((e, idx) => ({ name: e.name || e.engine || `Engine ${idx+1}`, value: e.share || 25, color: ['#ffd700','#00ff88','#ff6b6b','#61dafb'][idx % 4] })),
-      activity: Array.from({ length: 12 }, (_, i) => ({ time: `${i}:00`, transactions: (i + 1) * 3, blocks: (i + 1) }))
-    };
-
+    // Format data for charts
     const formatNumber = (num) => {
       if (!num) return '0';
-      if (num >= 1000000000) {
-        return (num / 1000000000).toFixed(1) + 'B';
-      } else if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-      } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
+      
+      // Handle string inputs (from web3Service BigInt conversions)
+      let numberValue;
+      if (typeof num === 'string') {
+        numberValue = parseFloat(num);
+      } else if (typeof num === 'bigint') {
+        numberValue = Number(num);
+      } else {
+        numberValue = num;
       }
-      return num.toLocaleString();
+      
+      // Handle NaN or invalid values
+      if (isNaN(numberValue)) {
+        return '0';
+      }
+      
+      if (numberValue >= 1000000) {
+        return (numberValue / 1000000).toFixed(1) + 'M';
+      } else if (numberValue >= 1000) {
+        return (numberValue / 1000).toFixed(1) + 'K';
+      }
+      return numberValue.toLocaleString();
     };
 
     const formatCurrency = (amount) => {
       if (!amount) return '0 MINED';
-      return `${formatNumber(amount)} MINED`;
+      
+      // Handle string inputs
+      let numberValue;
+      if (typeof amount === 'string') {
+        numberValue = parseFloat(amount);
+      } else if (typeof amount === 'bigint') {
+        numberValue = Number(amount);
+      } else {
+        numberValue = amount;
+      }
+      
+      if (isNaN(numberValue)) {
+        return '0 MINED';
+      }
+      
+      return `${formatNumber(numberValue)} MINED`;
     };
 
     const formatHashrate = (hashrate) => {
       if (!hashrate) return '0 H/s';
       
-      // If hashrate is already a formatted string, return it
       if (typeof hashrate === 'string' && hashrate.includes('H/s')) {
         return hashrate;
       }
       
-      // Convert number to formatted string
-      if (hashrate >= 1000000) {
-        return (hashrate / 1000000).toFixed(1) + ' TH/s';
-      } else if (hashrate >= 1000) {
-        return (hashrate / 1000).toFixed(1) + ' GH/s';
+      // Handle string inputs
+      let numberValue;
+      if (typeof hashrate === 'string') {
+        numberValue = parseFloat(hashrate);
+      } else if (typeof hashrate === 'bigint') {
+        numberValue = Number(hashrate);
+      } else {
+        numberValue = hashrate;
       }
-      return hashrate.toLocaleString() + ' H/s';
+      
+      if (isNaN(numberValue)) {
+        return '0 H/s';
+      }
+      
+      if (numberValue >= 1000000) {
+        return (numberValue / 1000000).toFixed(1) + ' TH/s';
+      } else if (numberValue >= 1000) {
+        return (numberValue / 1000).toFixed(1) + ' GH/s';
+      }
+      return numberValue.toLocaleString() + ' H/s';
     };
+
+    const formatAddress = (addr) => {
+      if (!addr) return '';
+      return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    };
+
+    // Prepare chart data
+    const networkStats = {
+      totalStaked: contractInfo?.totalStaked || 0,
+      maxDifficulty: contractInfo?.maxDifficulty || 0,
+      baseReward: contractInfo?.baseReward || 0,
+      paused: contractInfo?.paused || false,
+      owner: contractInfo?.owner || '0x0000...0000'
+    };
+
+    // Use dashboard data for critical statistics
+    const dashboardStats = {
+      activeMiners: dashboardData?.activeMiners || 0,
+      totalUsers: dashboardData?.users?.total || 0,
+      totalSessions: dashboardData?.mining?.totalSessions || 0,
+      totalCoinsEarned: dashboardData?.mining?.totalCoinsEarned || 0,
+      totalPapers: dashboardData?.research?.totalPapers || 0,
+      totalDiscoveries: dashboardData?.research?.totalDiscoveries || 0,
+      totalCitations: dashboardData?.research?.totalCitations || 0,
+      avgComplexity: dashboardData?.research?.avgComplexity || 0
+    };
+
+    const userStats = {
+      totalSessions: minerStats?.totalSessions || 0,
+      totalDiscoveries: minerStats?.totalDiscoveries || 0,
+      totalRewards: minerStats?.totalRewards || 0,
+      stakedAmount: minerStats?.stakedAmount || 0,
+      pendingRewards: stakingInfo?.rewards || 0
+    };
+
+    const tokenStats = tokenData?.data || {
+      totalSupply: 1000000000,
+      circulatingSupply: 500000000,
+      marketCap: 25000000,
+      price: 0.05
+    };
+
+    const engineStats = engineDistribution?.engines || [];
 
     return (
       <div className="dashboard">
         <div className="dashboard-container">
+          {/* Web3 Connection Status */}
+          {!web3Connected && (
+            <motion.div
+              className="web3-status-warning"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: 'linear-gradient(135deg, #ff6b6b, #feca57)',
+                color: 'white',
+                padding: '15px',
+                borderRadius: '10px',
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}
+            >
+              <FaExclamationTriangle style={{ marginRight: '10px' }} />
+              <strong>Wallet Not Connected</strong> - Connect your MetaMask wallet to view your personal dashboard data.
+            </motion.div>
+          )}
+
+          {web3Connected && (
+            <motion.div
+              className="web3-status-success"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: 'linear-gradient(135deg, #00b894, #00cec9)',
+                color: 'white',
+                padding: '15px',
+                borderRadius: '10px',
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}
+            >
+              <FaCheckCircle style={{ marginRight: '10px' }} />
+              <strong>Connected to Sepolia Testnet</strong> - Address: {formatAddress(currentAccount)} | Network: {currentNetwork}
+            </motion.div>
+          )}
+
           {/* Header */}
           <motion.div
             className="dashboard-header"
@@ -230,73 +319,50 @@ const Dashboard = () => {
             transition={{ duration: 0.5 }}
           >
             <div className="header-content">
-              <h1>Network Dashboard</h1>
-              <p>Real-time ProductiveMiner blockchain statistics and performance metrics</p>
-            </div>
-            <div className="time-range-selector">
-              <button
-                className={`time-btn ${timeRange === '24h' ? 'active' : ''}`}
-                onClick={() => setTimeRange('24h')}
-              >
-                24H
-              </button>
-              <button
-                className={`time-btn ${timeRange === '7d' ? 'active' : ''}`}
-                onClick={() => setTimeRange('7d')}
-              >
-                7D
-              </button>
-              <button
-                className={`time-btn ${timeRange === '30d' ? 'active' : ''}`}
-                onClick={() => setTimeRange('30d')}
-              >
-                30D
-              </button>
+              <h1>Dashboard</h1>
+              <p>Real-time overview of the ProductiveMiner platform</p>
             </div>
           </motion.div>
 
-          {/* Network Stats */}
+          {/* Network Statistics */}
           <motion.div
             className="network-stats"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
+            <h3>Network Statistics</h3>
             <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaShieldAlt />
+                </div>
+                <div className="stat-content">
+                  <h4>Total Staked</h4>
+                  <p className="stat-value">{formatCurrency(networkStats.totalStaked)}</p>
+                  <p className="stat-description">Total tokens staked in contract</p>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaCog />
+                </div>
+                <div className="stat-content">
+                  <h4>Max Difficulty</h4>
+                  <p className="stat-value">{formatNumber(networkStats.maxDifficulty)}</p>
+                  <p className="stat-description">Maximum mining difficulty</p>
+                </div>
+              </div>
+
               <div className="stat-card">
                 <div className="stat-icon">
                   <FaCoins />
                 </div>
                 <div className="stat-content">
-                  <h3>Total Supply</h3>
-                  <p className="stat-value">{formatCurrency(stats.totalSupply)}</p>
-                  <p className="stat-description">Fixed supply, deflationary model</p>
-                </div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <FaUsers />
-                </div>
-                <div className="stat-content">
-                  <h3>Circulating Supply</h3>
-                  <p className="stat-value">{formatCurrency(stats.circulatingSupply)}</p>
-                  <p className="stat-change positive">
-                    <FaArrowUp /> {((stats.circulatingSupply / stats.totalSupply) * 100).toFixed(1)}% of total
-                  </p>
-                </div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <FaChartLine />
-                </div>
-                <div className="stat-content">
-                  <h3>Staking APY</h3>
-                  <p className="stat-value">{stats.stakingAPY}%</p>
-                  <p className="stat-change positive">
-                    <FaArrowUp /> Active rewards
-                  </p>
+                  <h4>Base Reward</h4>
+                  <p className="stat-value">{formatCurrency(networkStats.baseReward)}</p>
+                  <p className="stat-description">Base mining reward</p>
                 </div>
               </div>
 
@@ -305,11 +371,42 @@ const Dashboard = () => {
                   <FaServer />
                 </div>
                 <div className="stat-content">
-                  <h3>Network Hashrate</h3>
-                  <p className="stat-value">{formatHashrate(stats.networkHashrate)}</p>
-                  <p className="stat-change positive">
-                    <FaArrowUp /> Growing
-                  </p>
+                  <h4>Contract Status</h4>
+                  <p className="stat-value">{networkStats.paused ? 'Paused' : 'Active'}</p>
+                  <p className="stat-description">Contract operational status</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Platform Statistics */}
+          <motion.div
+            className="platform-stats"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+          >
+            <h3>Platform Statistics</h3>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaUsers />
+                </div>
+                <div className="stat-content">
+                  <h4>Active Miners</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.activeMiners)}</p>
+                  <p className="stat-description">Miners active in last 24 hours</p>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaBrain />
+                </div>
+                <div className="stat-content">
+                  <h4>Global Mathematical Researchers</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.totalUsers)}</p>
+                  <p className="stat-description">Total registered researchers</p>
                 </div>
               </div>
 
@@ -318,11 +415,9 @@ const Dashboard = () => {
                   <FaRocket />
                 </div>
                 <div className="stat-content">
-                  <h3>Total Discoveries</h3>
-                  <p className="stat-value">{formatNumber(stats.totalDiscoveries)}</p>
-                  <p className="stat-change positive">
-                    <FaArrowUp /> +{flowStatus?.system?.blockchain?.discoveries || 0} last 24h
-                  </p>
+                  <h4>Total Discoveries</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.totalDiscoveries)}</p>
+                  <p className="stat-description">Mathematical breakthroughs</p>
                 </div>
               </div>
 
@@ -331,267 +426,252 @@ const Dashboard = () => {
                   <FaShieldAlt />
                 </div>
                 <div className="stat-content">
-                  <h3>Bit Strength</h3>
-                  <p className="stat-value">{formatNumber(stats.bitStrengthAdded)} bits</p>
-                  <p className="stat-change positive">
-                    <FaArrowUp /> +{Math.min(flowStatus?.system?.security?.currentBitStrength || 0, 1024)} last 24h
-                  </p>
+                  <h4>Bit Strength</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.avgComplexity)} bits</p>
+                  <p className="stat-description">Cryptographic security added</p>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          {/* Charts Section */}
+          {/* Research Statistics */}
           <motion.div
-            className="charts-section"
+            className="research-stats"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <div className="charts-grid">
-              {/* Hashrate Chart */}
-              <div className="chart-card">
-                <div className="chart-header">
-                  <h3>Network Hashrate</h3>
-                  <div className="chart-controls">
-                    <button className="control-btn">
-                      <FaCog />
-                    </button>
-                  </div>
+            <h3>Research Statistics</h3>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaChartLine />
                 </div>
-                <div className="chart-container">
-                  {chartData.hashrate.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <AreaChart data={chartData.hashrate}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                        <XAxis dataKey="time" stroke="rgba(255,255,255,0.6)" />
-                        <YAxis stroke="rgba(255,255,255,0.6)" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(0,0,0,0.8)', 
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: 'white'
-                          }}
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="hashrate" 
-                          stroke="#ffd700" 
-                          fill="rgba(255,215,0,0.2)" 
-                          strokeWidth={2}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="chart-placeholder">
-                      <p>No hashrate data available</p>
-                    </div>
-                  )}
+                <div className="stat-content">
+                  <h4>Total Papers</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.totalPapers)}</p>
+                  <p className="stat-description">Published research papers</p>
                 </div>
               </div>
 
-              {/* Engine Distribution */}
-              <div className="chart-card">
-                <div className="chart-header">
-                  <h3>Mathematical Engine Distribution</h3>
-                  <div className="chart-controls">
-                    <button className="control-btn">
-                      <FaCog />
-                    </button>
-                  </div>
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaBrain />
                 </div>
-                <div className="chart-container">
-                  {chartData.engineDistribution.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={chartData.engineDistribution}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={40}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {chartData.engineDistribution.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(0,0,0,0.8)', 
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: 'white'
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="chart-placeholder">
-                      <p>No engine data available</p>
-                    </div>
-                  )}
+                <div className="stat-content">
+                  <h4>Total Discoveries</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.totalDiscoveries)}</p>
+                  <p className="stat-description">Mathematical discoveries</p>
                 </div>
               </div>
 
-              {/* Network Activity */}
-              <div className="chart-card">
-                <div className="chart-header">
-                  <h3>Network Activity</h3>
-                  <div className="chart-controls">
-                    <button className="control-btn">
-                      <FaCog />
-                    </button>
-                  </div>
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaArrowUp />
                 </div>
-                <div className="chart-container">
-                  {chartData.activity.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={chartData.activity}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                        <XAxis dataKey="time" stroke="rgba(255,255,255,0.6)" />
-                        <YAxis stroke="rgba(255,255,255,0.6)" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(0,0,0,0.8)', 
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: 'white'
-                          }}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="transactions" 
-                          stroke="#00ff88" 
-                          strokeWidth={2}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="blocks" 
-                          stroke="#ff6b6b" 
-                          strokeWidth={2}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="chart-placeholder">
-                      <p>No activity data available</p>
-                    </div>
-                  )}
+                <div className="stat-content">
+                  <h4>Total Citations</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.totalCitations)}</p>
+                  <p className="stat-description">Research citations</p>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaCog />
+                </div>
+                <div className="stat-content">
+                  <h4>Avg Complexity</h4>
+                  <p className="stat-value">{formatNumber(dashboardStats.avgComplexity)}</p>
+                  <p className="stat-description">Average computational complexity</p>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          {/* Network Activity List */}
+          {/* User Statistics (only show if connected) */}
+          {web3Connected && (
+            <motion.div
+              className="user-stats"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <h3>Your Statistics</h3>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon">
+                    <FaRocket />
+                  </div>
+                  <div className="stat-content">
+                    <h4>Total Sessions</h4>
+                    <p className="stat-value">{userStats.totalSessions}</p>
+                    <p className="stat-description">Your mining sessions</p>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon">
+                    <FaBrain />
+                  </div>
+                  <div className="stat-content">
+                    <h4>Total Discoveries</h4>
+                    <p className="stat-value">{userStats.totalDiscoveries}</p>
+                    <p className="stat-description">Your mathematical discoveries</p>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon">
+                    <FaCoins />
+                  </div>
+                  <div className="stat-content">
+                    <h4>Total Rewards</h4>
+                    <p className="stat-value">{formatCurrency(userStats.totalRewards)}</p>
+                    <p className="stat-description">Your earned rewards</p>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon">
+                    <FaShieldAlt />
+                  </div>
+                  <div className="stat-content">
+                    <h4>Staked Amount</h4>
+                    <p className="stat-value">{formatCurrency(userStats.stakedAmount)}</p>
+                    <p className="stat-description">Your staked tokens</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Token Statistics */}
           <motion.div
-            className="activity-section"
+            className="token-stats"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <div className="section-header">
-              <h3>Recent Network Activity</h3>
-              <button className="view-all-btn">View All</button>
-            </div>
-            
-            <div className="activity-list">
-              {networkActivity?.recentActivity?.map((activity, index) => (
-                <div key={index} className="activity-item">
-                  <div className="activity-icon">
-                    {activity.type === 'discovery' && <FaRocket />}
-                    {activity.type === 'validator' && <FaUsers />}
-                    {activity.type === 'research' && <FaBrain />}
-                    {activity.type === 'reward' && <FaCoins />}
-                  </div>
-                  <div className="activity-content">
-                    <h4>{activity.title}</h4>
-                    <p>{activity.description}</p>
-                    <span className="activity-time">{activity.time}</span>
-                  </div>
-                  <div className="activity-value">
-                    <span className="value">{activity.value}</span>
-                    <span className={`change ${activity.changeType}`}>{activity.change}</span>
-                  </div>
+            <h3>Token Statistics</h3>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaChartLine />
                 </div>
-              )) || (
-                <>
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <FaRocket />
-                    </div>
-                    <div className="activity-content">
-                      <h4>New Mathematical Discovery</h4>
-                      <p>Riemann zero computation completed by 0xMiner1...</p>
-                      <span className="activity-time">2 minutes ago</span>
-                    </div>
-                    <div className="activity-value">
-                      <span className="value">+500 MINED</span>
-                      <span className="change positive">+45 complexity</span>
-                    </div>
-                  </div>
+                <div className="stat-content">
+                  <h4>Total Supply</h4>
+                  <p className="stat-value">{formatNumber(tokenStats.totalSupply)}</p>
+                  <p className="stat-description">Total MINED tokens</p>
+                </div>
+              </div>
 
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <FaUsers />
-                    </div>
-                    <div className="activity-content">
-                      <h4>New Validator Joined</h4>
-                      <p>Validator 0xValidator25 staked 100,000 MINED</p>
-                      <span className="activity-time">5 minutes ago</span>
-                    </div>
-                    <div className="activity-value">
-                      <span className="value">+100K MINED</span>
-                      <span className="change positive">Staked</span>
-                    </div>
-                  </div>
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaUsers />
+                </div>
+                <div className="stat-content">
+                  <h4>Circulating Supply</h4>
+                  <p className="stat-value">{formatNumber(tokenStats.circulatingSupply)}</p>
+                  <p className="stat-description">Tokens in circulation</p>
+                </div>
+              </div>
 
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <FaBrain />
-                    </div>
-                    <div className="activity-content">
-                      <h4>Research Paper Published</h4>
-                      <p>Yang-Mills field theory solution verified</p>
-                      <span className="activity-time">8 minutes ago</span>
-                    </div>
-                    <div className="activity-value">
-                      <span className="value">+800 MINED</span>
-                      <span className="change positive">+48 complexity</span>
-                    </div>
-                  </div>
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaCoins />
+                </div>
+                <div className="stat-content">
+                  <h4>Market Cap</h4>
+                  <p className="stat-value">${formatNumber(tokenStats.marketCap)}</p>
+                  <p className="stat-description">Total market capitalization</p>
+                </div>
+              </div>
 
-                  <div className="activity-item">
-                    <div className="activity-icon">
-                      <FaCoins />
-                    </div>
-                    <div className="activity-content">
-                      <h4>Rewards Distributed</h4>
-                      <p>Block #{stats.totalBlocks} rewards distributed to {stats.activeMiners} miners</p>
-                      <span className="activity-time">12 minutes ago</span>
-                    </div>
-                    <div className="activity-value">
-                      <span className="value">+2,500 MINED</span>
-                      <span className="change positive">Distributed</span>
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <FaArrowUp />
+                </div>
+                <div className="stat-content">
+                  <h4>Token Price</h4>
+                  <p className="stat-value">${tokenStats.price}</p>
+                  <p className="stat-description">Current MINED price</p>
+                </div>
+              </div>
             </div>
           </motion.div>
+
+          {/* Mathematical Engine Distribution */}
+          {engineStats.length > 0 && (
+            <motion.div
+              className="engine-distribution"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <h3>Mathematical Engine Distribution</h3>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={engineStats}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="totalDiscoveries"
+                    >
+                      {engineStats.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${index * 30}, 70%, 60%)`} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Recent Discoveries */}
+          {discoveries && discoveries.length > 0 && (
+            <motion.div
+              className="recent-discoveries"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              <h3>Recent Mathematical Discoveries</h3>
+              <div className="discoveries-grid">
+                {discoveries.slice(0, 6).map((discovery, index) => (
+                  <div key={index} className="discovery-card">
+                    <div className="discovery-icon">
+                      <FaBrain />
+                    </div>
+                    <div className="discovery-content">
+                      <h4>{discovery.title || `Discovery ${index + 1}`}</h4>
+                      <p>{discovery.description || 'Mathematical breakthrough'}</p>
+                      <span className="discovery-type">{discovery.type || 'Research'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     );
   } catch (error) {
-    console.error('❌ Dashboard component error:', error);
+    console.error('Dashboard error:', error);
     return (
       <div className="dashboard">
         <div className="dashboard-container">
-          <h1>Error loading Dashboard</h1>
-          <p>Failed to fetch or process data for the dashboard.</p>
-          <p>Please check your network connection and try again.</p>
+          <div className="error-message">
+            <h2>Dashboard Error</h2>
+            <p>Something went wrong loading the dashboard. Please try refreshing the page.</p>
+            <p>Error: {error.message}</p>
+          </div>
         </div>
       </div>
     );

@@ -3,18 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.11.2",
     "axios": "^1.4.0",
-    "react-scripts": "5.0.1",
-    "react-icons": "^4.10.1",
+    "ethers": "^6.15.0",
     "framer-motion": "^10.16.4",
-    "react-query": "^3.39.3",
-    "socket.io-client": "^4.7.2",
-    "recharts": "^2.8.0",
+    "react": "^18.2.0",
     "react-countup": "^6.4.2",
-    "react-intersection-observer": "^9.5.2"
+    "react-dom": "^18.2.0",
+    "react-icons": "^4.10.1",
+    "react-intersection-observer": "^9.5.2",
+    "react-query": "^3.39.3",
+    "react-router-dom": "^6.11.2",
+    "react-scripts": "5.0.1",
+    "recharts": "^2.8.0",
+    "socket.io-client": "^4.7.2",
+    "web3": "^4.16.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -25,7 +27,15 @@
     "eject": "react-scripts eject"
   },
   "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
