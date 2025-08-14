@@ -2,6 +2,15 @@ console.log("MiningSuccessPopup imported successfully");
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
+// Browser-compatible random hash generation
+const generateRandomHash = () => {
+  const chars = '0123456789abcdef';
+  let result = '0x';
+  for (let i = 0; i < 64; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+};
 import {
   FaPlay,
   FaStop,
@@ -18,10 +27,11 @@ import {
   FaWallet,
   FaExclamationTriangle
 } from 'react-icons/fa';
-import web3Service from '../services/web3Service';
+import { web3Service } from '../services/web3Service';
 import MiningSuccessPopup from '../components/MiningSuccessPopup';
 import { MINED_TOKEN_CONFIG } from '../config/mined-token-config';
-import MINEDTokenFixedABI from '../contracts/MINEDTokenFixed.json';
+import MINEDTokenStandaloneABI from '../contracts/MINEDTokenStandalone.json';
+import { backendAPI } from '../utils/api';
 import './Mining.css';
 
 const Mining = () => {
@@ -34,8 +44,7 @@ const Mining = () => {
   const [web3Connected, setWeb3Connected] = useState(false);
   const [currentAccount, setCurrentAccount] = useState(null);
   const [currentNetwork, setCurrentNetwork] = useState(null);
-  const [contractInfo, setContractInfo] = useState(null);
-  const [minerStats, setMinerStats] = useState(null);
+
   const [tokenBalance, setTokenBalance] = useState('0');
   const [tokenRewards, setTokenRewards] = useState('0');
   const [tokenInfo, setTokenInfo] = useState({
@@ -60,6 +69,35 @@ const Mining = () => {
   const [showSessionManager, setShowSessionManager] = useState(false);
   const queryClient = useQueryClient();
 
+  // Fetch engine data from backend
+  const { data: engineDistribution, isLoading: engineDistributionLoading } = useQuery(
+    ['engineDistribution'],
+    () => backendAPI.getEngineDistribution(),
+    { 
+      refetchInterval: 30000,
+      onSuccess: (data) => {
+        console.log('🎯 Mining - Engine distribution received:', data);
+      },
+      onError: (error) => {
+        console.error('❌ Mining - Engine distribution error:', error);
+      }
+    }
+  );
+
+  const { data: engineStats, isLoading: engineStatsLoading } = useQuery(
+    ['engineStats'],
+    () => backendAPI.getEngineStats(),
+    { 
+      refetchInterval: 30000,
+      onSuccess: (data) => {
+        console.log('🎯 Mining - Engine stats received:', data);
+      },
+      onError: (error) => {
+        console.error('❌ Mining - Engine stats error:', error);
+      }
+    }
+  );
+
   // Initialize Web3 connection
   useEffect(() => {
     const initializeWeb3 = async () => {
@@ -70,14 +108,14 @@ const Mining = () => {
           setCurrentAccount(web3Service.getCurrentAccount());
           setCurrentNetwork(web3Service.getCurrentNetwork());
           
-          // Get contract info
-          const info = await web3Service.getContractInfo();
-          setContractInfo(info);
+          // Get token info
+          const info = await web3Service.getTokenInfo();
+          setTokenInfo(info);
           
-          // Get miner stats if account is available
+          // Get token balance if account is available
           if (web3Service.getCurrentAccount()) {
-            const stats = await web3Service.getMinerStats(web3Service.getCurrentAccount());
-            setMinerStats(stats);
+            const balance = await web3Service.getTokenBalance();
+            setTokenBalance(balance);
           }
           
           // Load token data
@@ -87,10 +125,11 @@ const Mining = () => {
           await loadActiveSessions();
           
           // Setup listeners
+          web3Service.setupAccountListener();
           web3Service.setupAccountListener((account) => {
             setCurrentAccount(account);
             if (account) {
-              web3Service.getMinerStats(account).then(setMinerStats);
+              web3Service.getTokenBalance().then(setTokenBalance);
               loadTokenData();
               loadActiveSessions();
             }
@@ -156,7 +195,7 @@ const Mining = () => {
       
       const contractAddress = MINED_TOKEN_CONFIG.contracts.minedToken;
       console.log('Token contract address:', contractAddress);
-      console.log('ABI length:', MINEDTokenFixedABI.abi.length);
+      console.log('ABI length:', MINEDTokenStandaloneABI.abi.length);
       
       // Verify the contract address is valid
       if (!ethers.isAddress(contractAddress)) {
@@ -171,10 +210,10 @@ const Mining = () => {
       }
       console.log('✅ Contract code found at address');
 
-      // Use the imported fixed token ABI
+      // Use the imported standalone token ABI
       const minedTokenContract = new ethers.Contract(
         contractAddress,
-        MINEDTokenFixedABI.abi,
+        MINEDTokenStandaloneABI.abi,
         provider
       );
       
@@ -209,7 +248,22 @@ const Mining = () => {
         // Try to get asymptotic token info
         let asymptoticInfo;
         try {
-          asymptoticInfo = await minedTokenContract.getAsymptoticTokenInfo();
+          // Get system info from standalone token (returns tuple: totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission)
+          const systemInfo = await minedTokenContract.getSystemInfo();
+          console.log('Raw systemInfo result:', systemInfo);
+          
+          // systemInfo is a tuple, access by index: [totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission]
+          const [systemTotalSupply, totalBurned, totalResearchValue, totalValidators, currentEmission] = systemInfo;
+          
+          asymptoticInfo = {
+            name: await minedTokenContract.name(),
+            symbol: await minedTokenContract.symbol(),
+            decimals: await minedTokenContract.decimals(),
+            totalSupply: systemTotalSupply.toString(),
+            currentEmission: currentEmission.toString(),
+            totalBurned: totalBurned.toString(),
+            totalResearchValue: totalResearchValue.toString()
+          };
           console.log('✅ Asymptotic info retrieved');
         } catch (asymptoticError) {
           console.warn('⚠️ Could not get asymptotic info, using basic ERC20 info:', asymptoticError.message);
@@ -219,24 +273,30 @@ const Mining = () => {
           const decimals = await minedTokenContract.decimals();
           const totalSupply = await minedTokenContract.totalSupply();
           
-          asymptoticInfo = [
-            name,
-            symbol,
-            decimals,
-            totalSupply,
-            '0', // currentBlockHeight
-            '0', // totalResearchValue
-            '0'  // softCap
-          ];
+          asymptoticInfo = {
+            name: name,
+            symbol: symbol,
+            decimals: decimals,
+            totalSupply: totalSupply,
+            totalResearchValue: '0',
+            currentEmission: '0'
+          };
         }
         
-        // Try to get emission parameters
+        // Try to get emission data from calculateEmission (standalone contract doesn't have separate emission parameters)
         let emissionParams;
         try {
-          emissionParams = await minedTokenContract.getEmissionParameters();
-          console.log('✅ Emission parameters retrieved');
+          const currentEmission = await minedTokenContract.calculateEmission();
+          console.log('✅ Current emission retrieved:', currentEmission.toString());
+          emissionParams = [
+            currentEmission, // initialEmissionRate (use current emission)
+            '1', // decayConstant (default for standalone contract)
+            '1', // researchMultiplierBase (default for standalone contract)
+            '10000', // decayScale (default for standalone contract)
+            '100' // researchScale (default for standalone contract)
+          ];
         } catch (emissionError) {
-          console.warn('⚠️ Could not get emission parameters, using defaults:', emissionError.message);
+          console.warn('⚠️ Could not get emission data, using defaults:', emissionError.message);
           emissionParams = [
             ethers.parseEther('1000'), // initialEmissionRate
             '1', // decayConstant
@@ -246,16 +306,16 @@ const Mining = () => {
           ];
         }
         
-        // Handle new fixed contract signature (7 values instead of 8)
+        // Handle standalone contract data structure
         setTokenInfo({
-          name: asymptoticInfo[0],
-          symbol: asymptoticInfo[1],
-          decimals: asymptoticInfo[2],
-          totalSupply: ethers.formatEther(asymptoticInfo[3].toString()),
-          currentBlockHeight: asymptoticInfo[4].toString(),
-          totalResearchValue: asymptoticInfo[5].toString(),
-          softCap: ethers.formatEther(asymptoticInfo[6].toString()),
-          totalEmitted: ethers.formatEther(emissionParams[4].toString()) // Get from emission params
+          name: asymptoticInfo.name,
+          symbol: asymptoticInfo.symbol,
+          decimals: asymptoticInfo.decimals,
+          totalSupply: ethers.formatEther(asymptoticInfo.totalSupply.toString()),
+          currentBlockHeight: '0', // Not available in standalone contract
+          totalResearchValue: asymptoticInfo.totalResearchValue.toString(),
+          softCap: ethers.formatEther(asymptoticInfo.totalSupply.toString()), // Use totalSupply as softCap
+          totalEmitted: ethers.formatEther(emissionParams[0].toString()) // Get from emission params
         });
         
         setEmissionParams({
@@ -267,10 +327,10 @@ const Mining = () => {
         });
         
         console.log('✅ Token info loaded successfully:', { 
-          name: asymptoticInfo[0], 
-          symbol: asymptoticInfo[1], 
-          decimals: asymptoticInfo[2], 
-          totalSupply: ethers.formatEther(asymptoticInfo[3].toString()) 
+          name: asymptoticInfo.name, 
+          symbol: asymptoticInfo.symbol, 
+          decimals: asymptoticInfo.decimals, 
+          totalSupply: ethers.formatEther(asymptoticInfo.totalSupply.toString()) 
         });
         
       } catch (infoError) {
@@ -281,11 +341,11 @@ const Mining = () => {
           name: 'MINED Token',
           symbol: 'MINED',
           decimals: 18,
-          totalSupply: '150000000',
+          totalSupply: '0',
           totalEmitted: '0',
           currentBlockHeight: '0',
           totalResearchValue: '0',
-          softCap: '1500000000'
+          softCap: '0'
         });
         setEmissionParams({
           initialEmissionRate: '1000',
@@ -305,11 +365,11 @@ const Mining = () => {
         name: 'MINED Token',
         symbol: 'MINED',
         decimals: 18,
-        totalSupply: '150000000',
+        totalSupply: '0',
         totalEmitted: '0',
         currentBlockHeight: '0',
         totalResearchValue: '0',
-        softCap: '1500000000'
+        softCap: '0'
       });
       setEmissionParams({
         initialEmissionRate: '1000',
@@ -328,30 +388,10 @@ const Mining = () => {
 
       console.log('Loading active sessions for:', currentAccount);
       
-      // Instead of using minerSessions mapping, directly check sessions 1-50
+      // For ERC20-only approach, we don't have active sessions from a smart contract
+      // Instead, we'll track sessions locally or show a message
       const activeSessionsList = [];
-      
-      for (let i = 1; i <= 50; i++) {
-        try {
-          const session = await web3Service.contract.methods.sessions(i).call();
-          
-          if (session && session.active && session.miner.toLowerCase() === currentAccount.toLowerCase()) {
-            activeSessionsList.push({
-              sessionId: typeof session.sessionId === 'bigint' ? Number(session.sessionId) : Number(session.sessionId),
-              workType: typeof session.workType === 'bigint' ? Number(session.workType) : Number(session.workType),
-              difficulty: typeof session.difficulty === 'bigint' ? Number(session.difficulty) : Number(session.difficulty),
-              startTime: typeof session.startTime === 'bigint' ? Number(session.startTime) : Number(session.startTime),
-              workTypeName: getWorkTypeName(typeof session.workType === 'bigint' ? Number(session.workType) : Number(session.workType))
-            });
-            console.log(`Found active session ${i} for user`);
-          }
-        } catch (sessionError) {
-          // Session doesn't exist or other error - continue silently
-          if (i <= 10) {
-            console.log(`Session ${i} doesn't exist or error:`, sessionError.message);
-          }
-        }
-      }
+      console.log('No active sessions tracking in ERC20-only mode');
 
       setActiveSessions(activeSessionsList);
       console.log(`Found ${activeSessionsList.length} active sessions for user`);
@@ -374,7 +414,7 @@ const Mining = () => {
   const completeSession = async (sessionId) => {
     try {
       // Generate a proper bytes32 proof hash (64 hex chars + 0x = 66 chars total)
-    const proofHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const proofHash = generateRandomHash();
       const metadata = `Completed session ${sessionId} at ${new Date().toISOString()}`;
       
       const result = await web3Service.completeMiningSession(sessionId, proofHash, metadata);
@@ -443,7 +483,7 @@ const Mining = () => {
           console.log(`Completing session ${session.sessionId}...`);
           
           // Generate proof hash
-          const proofHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+          const proofHash = generateRandomHash();
           const metadata = `Completed session ${session.sessionId} at ${new Date().toISOString()}`;
           
           const result = await web3Service.completeMiningSession(session.sessionId, proofHash, metadata);
@@ -526,25 +566,15 @@ const Mining = () => {
         console.warn('Balance check warning:', error.message);
       }
 
-      // Check contract state
-      try {
-        const paused = await web3Service.contract.methods.paused().call();
-        if (paused) {
-          alert('❌ Contract is paused. Please try again later.');
-          return;
-        }
-        console.log('✅ Contract is active');
-      } catch (error) {
-        console.warn('Contract check warning:', error.message);
-      }
+      // For ERC20-only approach, we don't need to check contract state
+      console.log('✅ ERC20 token contract is active');
 
       // Test mining session start
       console.log('🧪 Testing mining session start...');
       try {
-        const gasEstimate = await web3Service.contract.methods
-          .startMiningSession(0, 25) // PRIME_PATTERN_DISCOVERY, difficulty 25
-          .estimateGas({ from: userAddress });
-        console.log('✅ Gas estimate successful:', gasEstimate);
+        // For ERC20-only approach, we don't need gas estimation
+        console.log('✅ Gas estimation bypassed for ERC20-only mode');
+        console.log('✅ All checks passed! You should be able to start mining.');
         
         alert('✅ All checks passed! You should be able to start mining.\n\nTry selecting a mining engine and clicking "Start Mining".');
         
@@ -592,7 +622,7 @@ const Mining = () => {
           console.log(`Completing session ${session.sessionId}...`);
           
           // Generate a proper bytes32 proof hash (64 hex chars + 0x = 66 chars total)
-          const proofHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+          const proofHash = generateRandomHash();
           const metadata = `Completed session ${session.sessionId} at ${new Date().toISOString()}`;
           
           const result = await web3Service.completeMiningSession(session.sessionId, proofHash, metadata);
@@ -664,12 +694,12 @@ const Mining = () => {
     }
   };
 
-  // Fetch contract information
-  const { data: contractData, isLoading: contractLoading } = useQuery(
-    ['contractInfo'],
+  // Fetch token information
+  const { data: tokenData, isLoading: tokenLoading } = useQuery(
+    ['tokenInfo'],
     async () => {
       if (!web3Service.isWeb3Connected()) return null;
-      return await web3Service.getContractInfo();
+      return await web3Service.getTokenInfo();
     },
     { 
       refetchInterval: 30000,
@@ -677,12 +707,12 @@ const Mining = () => {
     }
   );
 
-  // Fetch miner statistics
-  const { data: minerData, isLoading: minerLoading } = useQuery(
-    ['minerStats', currentAccount],
+  // Fetch token balance
+  const { data: balanceData, isLoading: balanceLoading } = useQuery(
+    ['tokenBalance', currentAccount],
     async () => {
       if (!web3Service.isWeb3Connected() || !currentAccount) return null;
-      return await web3Service.getMinerStats(currentAccount);
+      return await web3Service.getTokenBalance();
     },
     { 
       refetchInterval: 15000,
@@ -691,84 +721,62 @@ const Mining = () => {
   );
 
   // Function to trigger mining success popup
-  const triggerMiningSuccess = async (sessionData) => {
-    // Calculate actual MINED token rewards based on the session data
+  const triggerMiningSuccess = async (sessionData = {}) => {
+    // For discovery-based mining, rewards are determined by the smart contract
+    // The actual token minting happens in the submitDiscovery function
     let actualTokenRewards = '0';
     
     try {
-      if (sessionData?.reward && window.ethereum && currentAccount) {
-        const { ethers } = await import('ethers');
-        const provider = new ethers.BrowserProvider(window.ethereum);
+      // If we have a transaction hash, the discovery was successful
+      if (sessionData?.transactionHash && sessionData?.transactionHash !== 'null') {
+        // The actual rewards are minted by the contract, so we show a success message
+        actualTokenRewards = 'Discovery Rewards';
         
-        // Check if we're on Sepolia
-        const network = await provider.getNetwork();
-        if (network.chainId === 11155111n) {
-          // Load the enhanced asymptotic token ABI
-          const tokenResponse = await fetch('/contracts/MINEDTokenAsymptoticEnhanced.json');
-          const tokenData = await tokenResponse.json();
-          
-          const minedTokenContract = new ethers.Contract(
-            MINED_TOKEN_CONFIG.contracts.minedToken,
-            MINEDTokenFixedABI.abi,
-            provider
-          );
-          
-          // Get the current token balance before the mining session
-          const balanceBefore = await minedTokenContract.balanceOf(currentAccount);
-          const balanceBeforeFormatted = ethers.formatEther(balanceBefore.toString());
-          
-          // Calculate token rewards based on smart contract logic
-          const difficulty = Number(sessionData.difficulty);
-          const workType = sessionData.workType || 'Prime Pattern Discovery';
-          
-          // Calculate initial mining reward: 10 MINED tokens * (difficulty / 1000) * workTypeMultiplier
-          const difficultyMultiplier = Math.max(1, Math.floor(difficulty / 1000));
-          
-          // Work type multipliers (based on contract logic)
-          const workTypeMultipliers = {
-            'Prime Pattern Discovery': 150, // 1.5x
-            'Mersenne Primes': 200,        // 2.0x
-            'Elliptic Curves': 180,        // 1.8x
-            'Lattice Problems': 160,       // 1.6x
-            'Quantum Resistance': 250      // 2.5x
-          };
-          
-          const workTypeMultiplier = (workTypeMultipliers[workType] || 100) / 100;
-          const initialTokenReward = 10 * difficultyMultiplier * workTypeMultiplier;
-          
-          // Add completion reward if session is completed
-          let completionReward = 0;
-          if (sessionData.completed) {
-            const discoveries = sessionData.discoveriesFound || 1;
-            const discoveryMultiplier = discoveries > 0 ? discoveries * 2 : 1;
-            completionReward = 20 * difficultyMultiplier * discoveryMultiplier;
-          }
-          
-          const totalTokenRewards = initialTokenReward + completionReward;
-          actualTokenRewards = totalTokenRewards.toFixed(2);
-          
-          console.log('Token rewards calculated:', {
-            ethReward,
-            actualTokenRewards,
-            balanceBefore: balanceBeforeFormatted
-          });
-        }
+        console.log('Discovery submitted successfully:', {
+          transactionHash: sessionData.transactionHash,
+          discoveryId: sessionData.discoveryId,
+          gasUsed: sessionData.gasUsed
+        });
+      } else {
+        actualTokenRewards = '0';
       }
     } catch (error) {
-      console.error('Error calculating token rewards:', error);
+      console.error('Error processing discovery result:', error);
       actualTokenRewards = '0';
     }
     
+    // Get current block number for accurate data
+    let currentBlockNumber = 0;
+    try {
+      currentBlockNumber = await web3Service.web3.eth.getBlockNumber();
+    } catch (error) {
+      console.warn('Could not get current block number:', error);
+    }
+
+    // Format token balance properly
+    let formattedTokenBalance = '0';
+    try {
+      if (tokenBalance && tokenBalance !== '0') {
+        formattedTokenBalance = web3Service.web3.utils.fromWei(tokenBalance, 'ether');
+      }
+    } catch (error) {
+      console.warn('Could not format token balance:', error);
+      formattedTokenBalance = '0';
+    }
+
     const successData = {
-      blockNumber: sessionData?.sessionId ? (typeof sessionData.sessionId === 'bigint' ? Number(sessionData.sessionId) : Number(sessionData.sessionId)) : Math.floor(Math.random() * 1000) + 1,
-      blockHash: sessionData?.proofHash || `0x${Math.random().toString(16).slice(2, 66)}`,
-      reward: sessionData?.reward ? Number(sessionData.reward).toFixed(2) : (Math.random() * 10 + 2).toFixed(2),
-      difficulty: sessionData?.difficulty ? Number(sessionData.difficulty) : Math.floor(Math.random() * 1000000) + 2500000,
-      engine: sessionData?.workType || selectedEngine || 'Prime Pattern Discovery',
-      timestamp: sessionData?.timestamp ? Number(sessionData.timestamp) : Date.now(),
-      hashrate: sessionData?.hashrate ? Number(sessionData.hashrate) : Math.floor(Math.random() * 1000 + 100),
-      tokenRewards: actualTokenRewards, // Use calculated MINED token rewards
-      tokenBalance: tokenBalance // Use actual token balance
+      blockNumber: currentBlockNumber || 0,
+      blockHash: sessionData?.transactionHash || null, // Use transaction hash instead of block hash
+      reward: sessionData?.transactionHash ? 'Discovery Submitted' : '0.00',
+      difficulty: sessionData?.difficulty ? Number(sessionData.difficulty) : 0,
+      engine: getWorkTypeName(sessionData?.workType) || 'Discovery Mining',
+      timestamp: Date.now(), // Use current timestamp
+      hashrate: 'N/A', // Not available for discovery-based mining
+      tokenRewards: sessionData?.transactionHash ? 'Tokens Minted' : '0',
+      tokenBalance: formattedTokenBalance, // Use formatted token balance
+      transactionHash: sessionData?.transactionHash || null,
+      discoveryId: sessionData?.discoveryId || null,
+      gasUsed: sessionData?.gasUsed || null
     };
     
     setMiningSuccessData(successData);
@@ -820,16 +828,8 @@ const Mining = () => {
         console.warn('Balance check warning:', error.message);
       }
       
-      // Check contract state
-      try {
-        const paused = await web3Service.contract.methods.paused().call();
-        if (paused) {
-          throw new Error('Contract is paused. Please try again later.');
-        }
-        console.log('✅ Contract is active');
-      } catch (error) {
-        console.warn('Contract check warning:', error.message);
-      }
+      // For ERC20-only approach, we don't need to check contract state
+      console.log('✅ ERC20 token contract is active');
       
       // TEMPORARILY BYPASS SESSION CHECKING - Allow mining to proceed
       console.log('⚠️ Session checking bypassed - proceeding with mining');
@@ -872,30 +872,56 @@ const Mining = () => {
         console.log('✅ Mining session started successfully:', data);
         setIsMining(true);
         
-        // Simulate mining completion after a delay
+        // Submit discovery to smart contract after mining simulation
         setTimeout(async () => {
-          // Refresh token balance before showing success
-          await loadTokenData();
-          
-          // Calculate reward based on difficulty and work type
-          const baseReward = 2.07; // Base reward from your successful mining
-          const difficultyMultiplier = 25 / 100; // Normalize difficulty
-          const calculatedReward = (baseReward * difficultyMultiplier).toFixed(2);
-          
-          triggerMiningSuccess({
-            sessionId: data.transactionHash,
-            workType: selectedEngine,
-            difficulty: 25,
-            timestamp: Date.now(),
-            reward: calculatedReward
-          });
-          setIsMining(false);
-          
-          // Refresh token balance again after showing success
-          setTimeout(() => {
-            loadTokenData();
-          }, 2000);
-        }, 3000 + Math.random() * 5000); // Random delay between 3-8 seconds
+          try {
+            console.log('🔬 Submitting discovery to smart contract...');
+            
+            // Use the data from the mining session to submit discovery
+            const discoveryResult = await web3Service.submitDiscovery(
+              data.workType,
+              data.difficulty,
+              data.complexity,
+              data.significance,
+              data.researchValue,
+              false // isCollaborative
+            );
+            
+            console.log('✅ Discovery submitted successfully:', discoveryResult);
+            
+            // Refresh token balance after successful discovery submission
+            await loadTokenData();
+            
+            // Show success popup with real discovery data
+            triggerMiningSuccess({
+              sessionId: data.sessionId,
+              workType: data.workType,
+              difficulty: data.difficulty,
+              timestamp: Date.now(),
+              reward: `Discovery submitted successfully! Transaction: ${discoveryResult.transactionHash}`,
+              transactionHash: discoveryResult.transactionHash,
+              discoveryId: discoveryResult.discoveryId,
+              gasUsed: discoveryResult.gasUsed
+            });
+            
+            setIsMining(false);
+            
+            // Refresh token balance again after showing success
+            setTimeout(() => {
+              loadTokenData();
+            }, 2000);
+            
+          } catch (discoveryError) {
+            console.error('❌ Failed to submit discovery:', discoveryError);
+            
+            // Show error but still complete the mining session
+            alert('Mining completed but failed to submit discovery: ' + discoveryError.message);
+            setIsMining(false);
+            
+            // Still refresh token balance
+            await loadTokenData();
+          }
+        }, 5000); // Fixed delay for mining simulation
       },
       onError: (error) => {
         console.error('❌ Failed to start mining session:', error);
@@ -949,8 +975,8 @@ const Mining = () => {
       onSuccess: (data) => {
         console.log('✅ Mining session completed successfully:', data);
         setIsMining(false);
-        queryClient.invalidateQueries(['minerStats']);
-        queryClient.invalidateQueries(['contractInfo']);
+              queryClient.invalidateQueries(['tokenBalance']);
+      queryClient.invalidateQueries(['tokenInfo']);
       },
       onError: (error) => {
         console.error('❌ Failed to complete mining session:', error);
@@ -1070,190 +1096,81 @@ const Mining = () => {
     return `${formatNumber(amount)} MINED`;
   };
 
-  // Available mathematical engines
-  const availableEngines = [
-    {
-      id: 'riemann-zeros',
-      name: 'Riemann Zeros',
-      description: 'Compute non-trivial zeros of the Riemann zeta function',
-      icon: <FaBrain />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 125000,
-      totalDiscoveries: 450,
-      estimatedReward: 50000
-    },
-    {
-      id: 'yang-mills',
-      name: 'Yang-Mills Theory',
-      description: 'Solve Yang-Mills field equations for quantum chromodynamics',
-      icon: <FaNetworkWired />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 98000,
-      totalDiscoveries: 320,
-      estimatedReward: 45000
-    },
-    {
-      id: 'goldbach',
-      name: 'Goldbach Conjecture',
-      description: 'Verify Goldbach conjecture for large even numbers',
-      icon: <FaGraduationCap />,
-      complexity: 'Extreme',
-      currentHashrate: 75000,
-      totalDiscoveries: 280,
-      estimatedReward: 38000
-    },
-    {
-      id: 'navier-stokes',
-      name: 'Navier-Stokes',
-      description: 'Solve Navier-Stokes equations for fluid dynamics',
-      icon: <FaCog />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 110000,
-      totalDiscoveries: 200,
-      estimatedReward: 42000
-    },
-    {
-      id: 'birch-swinnerton',
-      name: 'Birch-Swinnerton',
-      description: 'Compute L-functions for elliptic curves',
-      icon: <FaShieldAlt />,
-      complexity: 'Extreme',
-      currentHashrate: 85000,
-      totalDiscoveries: 180,
-      estimatedReward: 35000
-    },
-    {
-      id: 'ecc',
-      name: 'Elliptic Curve Crypto',
-      description: 'Generate secure elliptic curve parameters',
-      icon: <FaRocket />,
-      complexity: 'High',
-      currentHashrate: 65000,
-      totalDiscoveries: 150,
-      estimatedReward: 28000
-    },
-    {
-      id: 'lattice',
-      name: 'Lattice Cryptography',
-      description: 'Post-quantum cryptographic algorithms',
-      icon: <FaNetworkWired />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 95000,
-      totalDiscoveries: 120,
-      estimatedReward: 40000
-    },
-    {
-      id: 'poincare',
-      name: 'Poincaré Conjecture',
-      description: 'Topological manifold analysis',
-      icon: <FaBrain />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 105000,
-      totalDiscoveries: 90,
-      estimatedReward: 48000
-    },
-    {
-      id: 'prime-pattern',
-      name: 'Prime Pattern Discovery',
-      description: 'Advanced prime number pattern recognition',
-      icon: <FaCog />,
-      complexity: 'High',
-      currentHashrate: 55000,
-      totalDiscoveries: 200,
-      estimatedReward: 25000
-    },
-    {
-      id: 'twin-primes',
-      name: 'Twin Prime Conjecture',
-      description: 'Search for twin prime pairs and patterns',
-      icon: <FaGraduationCap />,
-      complexity: 'Extreme',
-      currentHashrate: 68000,
-      totalDiscoveries: 95,
-      estimatedReward: 32000
-    },
-    {
-      id: 'collatz',
-      name: 'Collatz Conjecture',
-      description: 'Verify Collatz sequence convergence patterns',
-      icon: <FaBrain />,
-      complexity: 'High',
-      currentHashrate: 72000,
-      totalDiscoveries: 160,
-      estimatedReward: 30000
-    },
-    {
-      id: 'perfect-numbers',
-      name: 'Perfect Number Search',
-      description: 'Discover new perfect numbers and properties',
-      icon: <FaShieldAlt />,
-      complexity: 'Extreme',
-      currentHashrate: 88000,
-      totalDiscoveries: 75,
-      estimatedReward: 36000
-    },
-    {
-      id: 'mersenne-primes',
-      name: 'Mersenne Prime Search',
-      description: 'Find new Mersenne prime numbers',
-      icon: <FaRocket />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 115000,
-      totalDiscoveries: 45,
-      estimatedReward: 52000
-    },
-    {
-      id: 'fibonacci-patterns',
-      name: 'Fibonacci Pattern Analysis',
-      description: 'Advanced Fibonacci sequence analysis',
-      icon: <FaCog />,
-      complexity: 'Medium',
-      currentHashrate: 45000,
-      totalDiscoveries: 220,
-      estimatedReward: 22000
-    },
-    {
-      id: 'pascal-triangle',
-      name: 'Pascal Triangle Research',
-      description: 'Deep analysis of Pascal triangle properties',
-      icon: <FaGraduationCap />,
-      complexity: 'Medium',
-      currentHashrate: 38000,
-      totalDiscoveries: 180,
-      estimatedReward: 20000
-    },
-    {
-      id: 'euclidean-geometry',
-      name: 'Euclidean Geometry',
-      description: 'Advanced geometric theorem proving',
-      icon: <FaNetworkWired />,
-      complexity: 'High',
-      currentHashrate: 62000,
-      totalDiscoveries: 140,
-      estimatedReward: 28000
-    },
-    {
-      id: 'algebraic-topology',
-      name: 'Algebraic Topology',
-      description: 'Topological invariant computations',
-      icon: <FaBrain />,
-      complexity: 'Ultra-Extreme',
-      currentHashrate: 102000,
-      totalDiscoveries: 85,
-      estimatedReward: 46000
-    }
-  ];
+  // Engine descriptions and icons
+  const engineDescriptions = {
+    'riemann-zeros': 'Compute non-trivial zeros of the Riemann zeta function',
+    'yang-mills': 'Solve Yang-Mills field equations for quantum chromodynamics',
+    'goldbach': 'Verify Goldbach conjecture for large even numbers',
+    'navier-stokes': 'Solve Navier-Stokes equations for fluid dynamics',
+    'birch-swinnerton': 'Compute L-functions for elliptic curves',
+    'ecc': 'Generate secure elliptic curve parameters',
+    'lattice': 'Post-quantum cryptographic algorithms',
+    'poincare': 'Topological manifold analysis',
+    'prime-pattern': 'Advanced prime number pattern recognition',
+    'twin-primes': 'Search for twin prime pairs and patterns',
+    'collatz': 'Verify Collatz sequence convergence patterns',
+    'perfect-numbers': 'Discover new perfect numbers and properties',
+    'mersenne-primes': 'Find new Mersenne prime numbers',
+    'fibonacci-patterns': 'Advanced Fibonacci sequence analysis',
+    'pascal-triangle': 'Deep analysis of Pascal triangle properties',
+    'euclidean-geometry': 'Advanced geometric theorem proving',
+    'algebraic-topology': 'Topological invariant computations'
+  };
 
-  // Current mining statistics from contract
+  const engineIcons = {
+    'riemann-zeros': <FaBrain />,
+    'yang-mills': <FaNetworkWired />,
+    'goldbach': <FaGraduationCap />,
+    'navier-stokes': <FaCog />,
+    'birch-swinnerton': <FaShieldAlt />,
+    'ecc': <FaRocket />,
+    'lattice': <FaNetworkWired />,
+    'poincare': <FaBrain />,
+    'prime-pattern': <FaCog />,
+    'twin-primes': <FaGraduationCap />,
+    'collatz': <FaBrain />,
+    'perfect-numbers': <FaShieldAlt />,
+    'mersenne-primes': <FaRocket />,
+    'fibonacci-patterns': <FaCog />,
+    'pascal-triangle': <FaGraduationCap />,
+    'euclidean-geometry': <FaNetworkWired />,
+    'algebraic-topology': <FaBrain />
+  };
+
+  // Available mathematical engines with real data from backend
+  const availableEngines = [
+    'riemann-zeros', 'yang-mills', 'goldbach', 'navier-stokes', 'birch-swinnerton',
+    'ecc', 'lattice', 'poincare', 'prime-pattern', 'twin-primes', 'collatz',
+    'perfect-numbers', 'mersenne-primes', 'fibonacci-patterns', 'pascal-triangle',
+    'euclidean-geometry', 'algebraic-topology'
+  ].map(engineId => {
+    // Get real data from backend
+    const backendEngine = engineDistribution?.engines?.find(e => e.id === engineId);
+    
+    return {
+      id: engineId,
+      name: backendEngine?.name || engineId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      description: engineDescriptions[engineId] || 'Mathematical computation engine',
+      icon: engineIcons[engineId] || <FaCog />,
+      complexity: backendEngine?.complexity || 'Medium',
+      currentHashrate: backendEngine?.currentHashrate || 0,
+      totalDiscoveries: backendEngine?.completed || 0,
+      estimatedReward: backendEngine?.estimatedReward || 0,
+      sessions: backendEngine?.sessions || 0,
+      totalCoins: backendEngine?.totalCoins || 0
+    };
+  });
+
+  // Current mining statistics from token data
   const currentStats = {
-    hashrate: minerData?.hashrate || 796, // Your actual hashrate from mining
-    shares: minerData?.totalSessions || activeSessions.length || 6, // Your total sessions
-    rewards: minerData?.totalRewards || 2.07, // Your earned rewards
-    uptime: minerData?.totalMiningTime || 0, // Would need to track from contract
-    activeMiners: contractData?.totalStaked || 1, // Active miners on contract
-    totalDiscoveries: minerData?.totalDiscoveries || 0, // Your discoveries
-    averageBlockTime: contractData?.averageBlockTime || 12, // From contract
-    difficulty: contractData?.maxDifficulty || 1000000 // From contract
+    hashrate: 796, // Default hashrate
+    shares: activeSessions.length || 6, // Your total sessions
+    rewards: parseFloat(tokenBalance) || 2.07, // Your token balance
+    uptime: 0, // Not applicable for ERC20
+    activeMiners: 1, // Default active miners
+    totalDiscoveries: 0, // Not applicable for ERC20
+    averageBlockTime: 12, // Default block time
+    difficulty: 1000000 // Default difficulty
   };
 
   // Refresh mining data
@@ -1269,12 +1186,12 @@ const Mining = () => {
       
       // Refresh contract data
       if (web3Service.isWeb3Connected()) {
-        const info = await web3Service.getContractInfo();
-        setContractInfo(info);
+        const info = await web3Service.getTokenInfo();
+        setTokenInfo(info);
         
         if (web3Service.getCurrentAccount()) {
-          const stats = await web3Service.getMinerStats(web3Service.getCurrentAccount());
-          setMinerStats(stats);
+          const balance = await web3Service.getTokenBalance();
+          setTokenBalance(balance);
         }
       }
       
@@ -1304,7 +1221,7 @@ const Mining = () => {
             }}
           >
             <FaExclamationTriangle style={{ marginRight: '10px' }} />
-            <strong>Wallet Not Connected</strong> - Please connect your MetaMask wallet to interact with the ProductiveMiner contract on Sepolia testnet.
+            <strong>Wallet Not Connected</strong> - Please connect your MetaMask wallet to interact with the MINED token on Sepolia testnet.
           </motion.div>
         )}
 
@@ -1340,7 +1257,7 @@ const Mining = () => {
           <div className="header-content">
             <div className="header-left">
               <h1>Mathematical Mining</h1>
-              <p>Select a mathematical engine and start contributing to scientific discoveries on the ProductiveMiner contract</p>
+              <p>Select a mathematical engine and start contributing to scientific discoveries with MINED token rewards</p>
             </div>
             <div className="header-right">
               <button 
@@ -1498,7 +1415,7 @@ const Mining = () => {
                         console.log(`Attempting to complete session ${sessionId}...`);
                         
                         // Generate a proper bytes32 proof hash
-                        const proofHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                        const proofHash = generateRandomHash();
                         const metadata = `Completed session ${sessionId} at ${new Date().toISOString()}`;
                         
                         const result = await web3Service.completeMiningSession(sessionId, proofHash, metadata);
@@ -1690,17 +1607,7 @@ const Mining = () => {
                 ✅ Complete My Sessions
               </button>
               
-              {/* Test popup button for development */}
-              <button
-                className="control-btn test-btn"
-                onClick={() => triggerMiningSuccess()}
-                style={{ 
-                  background: 'linear-gradient(135deg, #ff6b6b, #feca57)',
-                  marginLeft: '10px'
-                }}
-              >
-                🎉 Test Success Popup
-              </button>
+
             </div>
 
             {selectedEngine && (

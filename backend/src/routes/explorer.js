@@ -2,6 +2,23 @@ const express = require('express');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { query } = require('../database/connection');
 const { get } = require('../database/redis');
+const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
+
+// Contract configuration for Sepolia
+const CONTRACT_CONFIG = {
+  SEPOLIA: {
+    rpcUrl: process.env.WEB3_PROVIDER || 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC',
+    contractAddress: process.env.CONTRACT_ADDRESS || '0xf58fA04DC5E087991EdC6f4ADEF1F87814f9F68b', // ProductiveMinerFixed contract
+    tokenAddress: process.env.TOKEN_ADDRESS || '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3', // MINEDTokenStandalone contract
+    chainId: 11155111,
+    explorerUrl: 'https://sepolia.etherscan.io'
+  }
+};
+
+// Load MINED token ABI
+const tokenABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../contracts/MINEDTokenStandalone.json'), 'utf8')).abi;
 
 const router = express.Router();
 
@@ -19,41 +36,275 @@ async function tryQuery(text, params = [], timeoutMs = 2000) {
   }
 }
 
-// List recent blocks with basic info
-router.get('/blocks', asyncHandler(async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+// Get explicit blockchain data from MINED token contract
+async function getExplicitBlockchainData() {
   try {
-    console.log('Explorer: Attempting database query for blocks, limit:', limit);
+    const provider = new ethers.JsonRpcProvider(CONTRACT_CONFIG.SEPOLIA.rpcUrl);
+    const tokenContract = new ethers.Contract(CONTRACT_CONFIG.SEPOLIA.tokenAddress, tokenABI, provider);
     
-    // Try database first
-    const result = await tryQuery(
-      `SELECT block_number, block_hash, parent_hash, miner_address, difficulty, nonce, timestamp, transactions_count, block_reward, status
-       FROM blocks
-       ORDER BY block_number DESC
-       LIMIT $1`,
-      [limit],
-      2000
-    );
+    // Get current block number
+    const currentBlock = await provider.getBlockNumber();
     
-    if (result && result.rows) {
-      console.log('Explorer: Database query successful, returned', result.rows.length, 'blocks');
-      return res.json({ 
-        success: true,
-        blocks: result.rows,
-        source: 'database'
-      });
+    // Get explicit token information
+    const totalSupply = await tokenContract.totalSupply();
+    const totalSupplyFormatted = parseFloat(ethers.formatEther(totalSupply));
+    
+    // Get system info from token contract
+    let systemInfo = null;
+    try {
+      systemInfo = await tokenContract.getSystemInfo();
+      console.log('System info retrieved:', systemInfo);
+    } catch (error) {
+      console.log('getSystemInfo failed:', error.message);
     }
     
-    // Fallback to Redis cached recent blocks
-    console.log('Explorer: Database failed, falling back to Redis');
-    const cached = await get('recent_blocks') || [];
-    console.log('Explorer: Redis fallback returned', cached.length, 'blocks');
+    // Query recent events (last 1000 blocks for recent activity)
+    const fromBlock = Math.max(0, currentBlock - 1000);
+    const toBlock = currentBlock;
     
-    return res.json({ 
-      success: true,
-      blocks: cached.slice(0, limit),
-      source: 'redis_cache'
+    // Get explicit events from token contract
+    let discoveryEvents = [];
+    let stakedEvents = [];
+    let unstakedEvents = [];
+    let rewardsEvents = [];
+    let transferEvents = [];
+    
+    try {
+      // Get DiscoverySubmitted events (method 0x6e216bd6)
+      discoveryEvents = await tokenContract.queryFilter('DiscoverySubmitted', fromBlock, toBlock);
+      console.log('DiscoverySubmitted events found:', discoveryEvents.length);
+      
+      // Get Staked events
+      stakedEvents = await tokenContract.queryFilter('Staked', fromBlock, toBlock);
+      console.log('Staked events found:', stakedEvents.length);
+      
+      // Get Unstaked events
+      unstakedEvents = await tokenContract.queryFilter('Unstaked', fromBlock, toBlock);
+      console.log('Unstaked events found:', unstakedEvents.length);
+      
+      // Get RewardsClaimed events
+      rewardsEvents = await tokenContract.queryFilter('RewardsClaimed', fromBlock, toBlock);
+      console.log('RewardsClaimed events found:', rewardsEvents.length);
+      
+      // Get Transfer events
+      transferEvents = await tokenContract.queryFilter('Transfer', fromBlock, toBlock);
+      console.log('Transfer events found:', transferEvents.length);
+    } catch (eventError) {
+      console.log('No blockchain events found yet:', eventError.message);
+    }
+    
+    // Fetch actual Sepolia blocks (last 20 blocks)
+    const actualBlocks = [];
+    const blocksToFetch = 20;
+    
+    for (let i = 0; i < blocksToFetch; i++) {
+      try {
+        const blockNumber = currentBlock - i;
+        const block = await provider.getBlock(blockNumber, true); // Include full transaction details
+        
+        if (block) {
+          // Check if this block contains MINED token transactions
+          const minedTransactions = block.transactions.filter(tx => 
+            tx.to && tx.to.toLowerCase() === CONTRACT_CONFIG.SEPOLIA.tokenAddress.toLowerCase()
+          );
+          
+          const blockData = {
+            blockNumber: block.number,
+            blockHash: block.hash,
+            miner: block.miner,
+            workType: minedTransactions.length > 0 ? 'MINED Token Activity' : 'Sepolia Block',
+            difficulty: block.difficulty.toString(),
+            reward: 0, // Sepolia doesn't have mining rewards like PoW
+            timestamp: block.timestamp,
+            status: 'confirmed',
+            transactions_count: block.transactions.length,
+            method: minedTransactions.length > 0 ? 'MINED Contract Interaction' : 'Standard Block',
+            gasUsed: block.gasUsed.toString(),
+            gasLimit: block.gasLimit.toString(),
+            baseFeePerGas: block.baseFeePerGas ? block.baseFeePerGas.toString() : '0',
+            extraData: block.extraData,
+            parentHash: block.parentHash,
+            nonce: block.nonce,
+            totalDifficulty: block.totalDifficulty ? block.totalDifficulty.toString() : '0',
+            hasMinedActivity: minedTransactions.length > 0,
+            minedTransactionsCount: minedTransactions.length
+          };
+          
+          actualBlocks.push(blockData);
+        }
+      } catch (blockError) {
+        console.log(`Failed to fetch block ${currentBlock - i}:`, blockError.message);
+      }
+    }
+    
+    // Get explicit gas and consensus data from recent blocks
+    const gasAndConsensusData = [];
+    const blockNumbersToFetch = [currentBlock, currentBlock - 1, currentBlock - 2, 8979127]; // Include the specific block you mentioned
+    
+    for (const blockNumber of blockNumbersToFetch) {
+      try {
+        const block = await provider.getBlock(blockNumber, true); // Include full transaction details
+        if (block) {
+          const gasData = {
+            blockNumber: block.number,
+            blockHash: block.hash,
+            gasUsed: block.gasUsed.toString(),
+            gasLimit: block.gasLimit.toString(),
+            baseFeePerGas: block.baseFeePerGas ? block.baseFeePerGas.toString() : '0',
+            extraData: block.extraData,
+            miner: block.miner,
+            timestamp: block.timestamp,
+            difficulty: block.difficulty.toString(),
+            totalDifficulty: block.totalDifficulty ? block.totalDifficulty.toString() : '0',
+            nonce: block.nonce,
+            parentHash: block.parentHash,
+            transactionsCount: block.transactions.length,
+            gasUtilization: block.gasLimit > 0 ? (parseInt(block.gasUsed) / parseInt(block.gasLimit) * 100).toFixed(2) : '0',
+            averageGasPrice: block.transactions.length > 0 ? 
+              block.transactions.reduce((sum, tx) => sum + parseInt(tx.gasPrice || 0), 0) / block.transactions.length : 0
+          };
+          gasAndConsensusData.push(gasData);
+        }
+      } catch (blockError) {
+        console.log(`Failed to fetch block ${blockNumber}:`, blockError.message);
+      }
+    }
+    
+    // Process explicit discovery events as "discovery blocks"
+    const discoveryBlocks = discoveryEvents.map((event, index) => {
+      const blockNumber = currentBlock - discoveryEvents.length + index + 1;
+      const blockData = {
+        blockNumber: blockNumber,
+        blockHash: event.transactionHash,
+        miner: event.args.discoverer || event.args.from,
+        workType: 'Discovery Mining',
+        difficulty: 0,
+        reward: event.args.reward ? parseFloat(ethers.formatEther(event.args.reward)) : 0,
+        timestamp: event.blockNumber,
+        status: 'confirmed',
+        transactions_count: 1,
+        method: '0x6e216bd6',
+        discoveryId: event.args.discoveryId?.toString() || `discovery_${index}`,
+        complexity: event.args.complexity?.toString() || '0',
+        significance: event.args.significance?.toString() || '0',
+        researchValue: event.args.researchValue?.toString() || '0',
+        isDiscoveryBlock: true
+      };
+      return blockData;
     });
+    
+    // Combine actual blocks with discovery blocks (discovery blocks take priority)
+    const allBlocks = [...discoveryBlocks, ...actualBlocks].sort((a, b) => b.blockNumber - a.blockNumber);
+    
+    // Process explicit transfer events as transactions
+    const transactions = transferEvents.map(event => {
+      return {
+        tx_hash: event.transactionHash,
+        block_number: event.blockNumber,
+        from_address: event.args.from,
+        to_address: event.args.to,
+        value: parseFloat(ethers.formatEther(event.args.value)),
+        status: 'confirmed',
+        transaction_type: 'MINED Transfer',
+        created_at: new Date(event.blockNumber * 1000).toISOString(),
+        method: event.topics[0] // Transfer event signature
+      };
+    });
+    
+    // Calculate explicit statistics
+    const totalDiscoveries = discoveryEvents.length;
+    const totalTransfers = transferEvents.length;
+    const totalStaked = stakedEvents.reduce((sum, event) => {
+      return sum + parseFloat(ethers.formatEther(event.args.amount || 0));
+    }, 0);
+    const totalRewardsDistributed = rewardsEvents.reduce((sum, event) => {
+      return sum + parseFloat(ethers.formatEther(event.args.amount || 0));
+    }, 0);
+    
+    // Get recent activity analysis
+    const recentActivity = {
+      discoveriesLast24h: discoveryEvents.filter(d => d.blockNumber > currentBlock - 5760).length, // ~24h in blocks
+      transfersLast24h: transferEvents.filter(t => t.blockNumber > currentBlock - 5760).length,
+      activeMiners: discoveryEvents.length > 0 ? new Set(discoveryEvents.map(d => d.discoverer || d.args.from)).size : 0,
+      averageReward: discoveryEvents.length > 0 ? 
+        discoveryEvents.reduce((sum, event) => sum + (event.args.reward ? parseFloat(ethers.formatEther(event.args.reward)) : 0), 0) / discoveryEvents.length : 0
+    };
+    
+    return {
+      blocks: allBlocks,
+      transactions: transactions,
+      gasAndConsensus: gasAndConsensusData,
+      stats: {
+        totalBlocks: allBlocks.length,
+        totalTransactions: totalTransfers,
+        confirmedBlocks: allBlocks.length,
+        averageBlockTime: 0, // Not applicable for discovery-based mining
+        pendingBlocks: 0,
+        totalStaked: totalStaked,
+        totalRewardsDistributed: totalRewardsDistributed,
+        totalSupply: totalSupplyFormatted,
+        currentBlock: currentBlock,
+        hasEvents: discoveryEvents.length > 0 || transferEvents.length > 0,
+        hasSepoliaBlocks: actualBlocks.length > 0,
+        recentActivity: recentActivity
+      }
+    };
+  } catch (error) {
+    console.error('Failed to get explicit blockchain data from Sepolia:', error);
+    throw new Error('Unable to fetch explicit blockchain data');
+  }
+}
+
+// List recent blocks with explicit blockchain data
+router.get('/blocks', asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+  
+  try {
+    console.log('Explorer: Fetching explicit blockchain data for blocks, limit:', limit);
+    
+    // Try to get explicit blockchain data
+    try {
+      const blockchainData = await getExplicitBlockchainData();
+      
+      return res.json({ 
+        success: true,
+        blocks: blockchainData.blocks.slice(0, limit),
+        totalBlocks: blockchainData.stats.totalBlocks,
+        source: 'blockchain',
+        note: blockchainData.stats.hasEvents ? 'Explicit blockchain data from MINED token contract' : 'No mining activity detected yet'
+      });
+    } catch (blockchainError) {
+      console.warn('Blockchain connection failed, falling back to database:', blockchainError.message);
+      
+      // Fallback to database
+      const result = await tryQuery(
+        `SELECT block_number, block_hash, parent_hash, miner_address, difficulty, nonce, timestamp, transactions_count, block_reward, status
+         FROM blocks
+         ORDER BY block_number DESC
+         LIMIT $1`,
+        [limit],
+        2000
+      );
+      
+      if (result && result.rows) {
+        console.log('Explorer: Database query successful, returned', result.rows.length, 'blocks');
+        return res.json({ 
+          success: true,
+          blocks: result.rows,
+          totalBlocks: result.rows.length,
+          source: 'database'
+        });
+      }
+      
+      // Final fallback - return empty array
+      return res.json({ 
+        success: true,
+        blocks: [],
+        totalBlocks: 0,
+        source: 'fallback',
+        note: 'No blocks found - mining may not have started yet'
+      });
+    }
     
   } catch (error) {
     console.error('Explorer: All data sources failed:', error.message);
@@ -62,93 +313,170 @@ router.get('/blocks', asyncHandler(async (req, res) => {
     return res.json({ 
       success: true,
       blocks: [],
+      totalBlocks: 0,
       source: 'fallback',
       note: 'No blocks found - mining may not have started yet'
     });
   }
 }));
 
-// List recent transactions
+// List recent transactions with explicit blockchain data
 router.get('/transactions', asyncHandler(async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
   
   try {
-    const result = await tryQuery(
-      `SELECT tx_hash, block_number, from_address, to_address, value, status, transaction_type, created_at
-       FROM transactions
-       ORDER BY created_at DESC
-       LIMIT $1`,
-      [limit],
-      2000
-    );
+    console.log('Explorer: Fetching explicit blockchain data for transactions, limit:', limit);
     
-    if (result && result.rows) {
+    // Try to get explicit blockchain data
+    try {
+      const blockchainData = await getExplicitBlockchainData();
+      
       return res.json({ 
         success: true,
-        transactions: result.rows,
-        source: 'database'
+        transactions: blockchainData.transactions.slice(0, limit),
+        totalTransactions: blockchainData.stats.totalTransactions,
+        source: 'blockchain',
+        note: blockchainData.stats.hasEvents ? 'Explicit blockchain data from MINED token contract' : 'No transactions detected yet'
+      });
+    } catch (blockchainError) {
+      console.warn('Blockchain connection failed, falling back to database:', blockchainError.message);
+      
+      // Fallback to database
+      const result = await tryQuery(
+        `SELECT tx_hash, block_number, from_address, to_address, value, status, transaction_type, created_at
+         FROM transactions
+         ORDER BY created_at DESC
+         LIMIT $1`,
+        [limit],
+        2000
+      );
+      
+      if (result && result.rows) {
+        return res.json({ 
+          success: true,
+          transactions: result.rows,
+          totalTransactions: result.rows.length,
+          source: 'database'
+        });
+      }
+      
+      // Final fallback - return empty array
+      return res.json({ 
+        success: true,
+        transactions: [],
+        totalTransactions: 0,
+        source: 'fallback',
+        note: 'No transactions found - mining may not have started yet'
       });
     }
-    
-    // Fallback to empty array
-    return res.json({ 
-      success: true,
-      transactions: [],
-      source: 'fallback',
-      note: 'No transactions found - mining may not have started yet'
-    });
     
   } catch (error) {
     console.error('Explorer transactions error:', error.message);
     return res.json({ 
       success: true,
       transactions: [],
+      totalTransactions: 0,
       source: 'fallback',
       note: 'Unable to fetch transactions'
     });
   }
 }));
 
-// Get explorer statistics
-router.get('/stats', asyncHandler(async (req, res) => {
+// Get gas and consensus data endpoint
+router.get('/gas-consensus', asyncHandler(async (req, res) => {
   try {
-    // Try to get stats from database
-    const blocksResult = await tryQuery('SELECT COUNT(*) as total_blocks FROM blocks', [], 2000);
-    const transactionsResult = await tryQuery('SELECT COUNT(*) as total_transactions FROM transactions', [], 2000);
-    const confirmedBlocksResult = await tryQuery('SELECT COUNT(*) as confirmed_blocks FROM blocks WHERE status = \'confirmed\'', [], 2000);
+    console.log('Explorer: Fetching explicit gas and consensus data from Sepolia blockchain...');
     
-    const totalBlocks = blocksResult?.rows?.[0]?.total_blocks || 0;
-    const totalTransactions = transactionsResult?.rows?.[0]?.total_transactions || 0;
-    const confirmedBlocks = confirmedBlocksResult?.rows?.[0]?.confirmed_blocks || 0;
-    
-    // Get recent blocks for average block time calculation
-    const recentBlocksResult = await tryQuery(
-      `SELECT timestamp FROM blocks WHERE status = 'confirmed' ORDER BY block_number DESC LIMIT 10`,
-      [],
-      2000
-    );
-    
-    let averageBlockTime = 0;
-    if (recentBlocksResult?.rows && recentBlocksResult.rows.length > 1) {
-      const timestamps = recentBlocksResult.rows.map(row => new Date(row.timestamp).getTime()).sort((a, b) => b - a);
-      const timeDiffs = [];
-      for (let i = 0; i < timestamps.length - 1; i++) {
-        timeDiffs.push(timestamps[i] - timestamps[i + 1]);
-      }
-      averageBlockTime = timeDiffs.length > 0 ? Math.floor(timeDiffs.reduce((a, b) => a + b, 0) / timeDiffs.length / 1000) : 0;
+    // Try to get explicit blockchain data
+    try {
+      const blockchainData = await getExplicitBlockchainData();
+      
+      return res.json({ 
+        success: true,
+        gasAndConsensus: blockchainData.gasAndConsensus,
+        totalBlocks: blockchainData.gasAndConsensus.length,
+        source: 'blockchain',
+        note: blockchainData.gasAndConsensus.length > 0 ? 'Explicit gas and consensus data from Sepolia blockchain' : 'No gas data available'
+      });
+    } catch (blockchainError) {
+      console.warn('Blockchain connection failed, returning fallback data:', blockchainError.message);
+      
+      // Fallback - return empty data
+      return res.json({ 
+        success: true,
+        gasAndConsensus: [],
+        totalBlocks: 0,
+        source: 'fallback',
+        note: 'No gas and consensus data available - blockchain connection failed'
+      });
     }
     
-    return res.json({
+  } catch (error) {
+    console.error('Explorer gas-consensus error:', error.message);
+    
+    // Final fallback - return empty array with status
+    return res.json({ 
       success: true,
-      stats: {
-        totalBlocks: parseInt(totalBlocks),
-        totalTransactions: parseInt(totalTransactions),
-        confirmedBlocks: parseInt(confirmedBlocks),
-        averageBlockTime: averageBlockTime,
-        pendingBlocks: parseInt(totalBlocks) - parseInt(confirmedBlocks)
-      },
-      source: 'database'
+      gasAndConsensus: [],
+      totalBlocks: 0,
+      source: 'fallback',
+      note: 'No gas and consensus data available'
     });
+  }
+}));
+
+// Get explorer statistics with explicit blockchain data
+router.get('/stats', asyncHandler(async (req, res) => {
+  try {
+    console.log('Explorer: Fetching explicit blockchain statistics');
+    
+    // Try to get explicit blockchain data
+    try {
+      const blockchainData = await getExplicitBlockchainData();
+      
+      return res.json({
+        success: true,
+        stats: blockchainData.stats,
+        gasAndConsensus: blockchainData.gasAndConsensus,
+        source: 'blockchain',
+        note: blockchainData.stats.hasEvents ? 'Explicit blockchain data from MINED token contract' : 'No mining activity detected yet'
+      });
+    } catch (blockchainError) {
+      console.warn('Blockchain connection failed, falling back to database:', blockchainError.message);
+      
+      // Fallback to database
+      const blocksResult = await tryQuery('SELECT COUNT(*) as total_blocks FROM blocks', [], 2000);
+      const transactionsResult = await tryQuery('SELECT COUNT(*) as total_transactions FROM transactions', [], 2000);
+      const confirmedBlocksResult = await tryQuery('SELECT COUNT(*) as confirmed_blocks FROM blocks WHERE status = \'confirmed\'', [], 2000);
+      
+      const totalBlocks = blocksResult?.rows?.[0]?.total_blocks || 0;
+      const totalTransactions = transactionsResult?.rows?.[0]?.total_transactions || 0;
+      const confirmedBlocks = confirmedBlocksResult?.rows?.[0]?.confirmed_blocks || 0;
+      
+      return res.json({
+        success: true,
+        stats: {
+          totalBlocks: parseInt(totalBlocks),
+          totalTransactions: parseInt(totalTransactions),
+          confirmedBlocks: parseInt(confirmedBlocks),
+          averageBlockTime: 0,
+          pendingBlocks: parseInt(totalBlocks) - parseInt(confirmedBlocks),
+          totalStaked: 0,
+          totalRewardsDistributed: 0,
+          totalSupply: 0,
+          currentBlock: 0,
+          hasEvents: false,
+          recentActivity: {
+            discoveriesLast24h: 0,
+            transfersLast24h: 0,
+            activeMiners: 0,
+            averageReward: 0
+          }
+        },
+        gasAndConsensus: [],
+        source: 'database'
+      });
+    }
     
   } catch (error) {
     console.error('Explorer stats error:', error.message);
@@ -161,8 +489,20 @@ router.get('/stats', asyncHandler(async (req, res) => {
         totalTransactions: 0,
         confirmedBlocks: 0,
         averageBlockTime: 0,
-        pendingBlocks: 0
+        pendingBlocks: 0,
+        totalStaked: 0,
+        totalRewardsDistributed: 0,
+        totalSupply: 0,
+        currentBlock: 0,
+        hasEvents: false,
+        recentActivity: {
+          discoveriesLast24h: 0,
+          transfersLast24h: 0,
+          activeMiners: 0,
+          averageReward: 0
+        }
       },
+      gasAndConsensus: [],
       source: 'fallback',
       note: 'No mining activity detected yet'
     });

@@ -119,7 +119,37 @@ contract UniversalBridge {
 - 🔄 Week 9-12: Optimize tokenomics based on usage data
 
 ### **Phase 2: Multi-Chain Expansion (Q2-Q4 2025)**
-A
+A## 🌐 **Supported Blockchains (Current & Future)**
+
+### **Layer 1 Blockchains:**
+- **ETH**: Ethereum mainnet
+- **POLKADOT**: Polkadot ecosystem and parachains
+- **BSC**: Binance Smart Chain
+- **SOLANA**: Solana network
+- **COSMOS**: Cosmos ecosystem
+- **CARDANO**: Cardano network (future)
+- **ALGORAND**: Algorand network (future)
+- **TEZOS**: Tezos network (future)
+- **AVALANCHE**: Avalanche C-Chain
+- **NEAR**: NEAR Protocol (future)
+- **FLOW**: Flow blockchain (future)
+
+### **Layer 2 & Scaling Solutions:**
+- **POLYGON**: Polygon network
+- **ARBITRUM**: Arbitrum One and Nova
+- **OPTIMISM**: Optimism network
+- **BASE**: Coinbase L2 (future)
+- **ZKSYNC**: zkSync Era (future)
+- **STARKNET**: StarkNet (future)
+- **SCROLL**: Scroll (future)
+
+### **Specialized Chains:**
+- **MOONBEAM**: Polkadot parachain
+- **ACALA**: Polkadot DeFi parachain
+- **FANTOM**: Fantom Opera
+- **HARMONY**: Harmony One
+- **CELO**: Celo network
+
 
 ## 🔧 **Technical Implementation**
 

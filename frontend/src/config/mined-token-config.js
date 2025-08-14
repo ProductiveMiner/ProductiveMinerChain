@@ -1,5 +1,5 @@
 // MINED Token Configuration for ProductiveMiner.org
-// This file contains all the configuration needed to integrate the MINED token
+// ERC20 Token Only - No Smart Contract Integration
 
 export const MINED_TOKEN_CONFIG = {
   // Network Configuration
@@ -10,21 +10,19 @@ export const MINED_TOKEN_CONFIG = {
     currencySymbol: "ETH"
   },
 
-           // Contract Addresses (Deployed to Sepolia)
-         contracts: {
-           productiveMiner: "0xB576afEfB7C466B0146ee81A9256a3DE1ACF2146", // ProductiveMinerFixed address (CORRECTED)
-           minedToken: "0xC46C90F37B83868fA46A3653daf3C3b49a4f1604", // MINEDTokenFixed address (CORRECTED)
-           tokenBridge: "0x3D9cCBF6B083A2C1A7CE3F9C0B033e03732260c1"
-         },
+  // Contract Addresses (Deployed to Sepolia) - ERC20 Only
+  contracts: {
+    minedToken: "0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3" // MINEDTokenStandalone ERC20 contract
+  },
 
   // Token Information
   token: {
-    name: "MINED Token (Asymptotic Enhanced)",
+    name: "MINED Token (Standalone)",
     symbol: "MINED",
     decimals: 18,
     totalSupply: "1000000000.0",
     softCap: "1500000000.0",
-    description: "Enhanced MINED Token with asymptotic emission model for long-term mathematical discovery mining"
+    description: "Standalone MINED Token with asymptotic emission model for mathematical discovery mining"
   },
 
   // Asymptotic Emission Model
@@ -92,23 +90,6 @@ export const MINED_TOKEN_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
   "event AsymptoticEmission(uint256 blockHeight, uint256 emission, uint256 researchValue, uint256 multiplier)",
   "event ResearchValueAdded(uint256 blockHeight, address indexed contributor, uint256 researchValue)"
-];
-
-// Token Bridge ABI
-export const TOKEN_BRIDGE_ABI = [
-  "function minedToken() view returns (address)",
-  "function productiveMinerContract() view returns (address)",
-  "function miningRewardRate() view returns (uint256)",
-  "function stakingRewardRate() view returns (uint256)",
-  "function researchRewardRate() view returns (uint256)",
-  "function distributeMiningReward(address _miner, uint256 _ethAmount)",
-  "function distributeStakingReward(address _staker, uint256 _ethAmount)",
-  "function distributeResearchReward(address _researcher, uint256 _ethAmount)",
-  "function miningRewards(address) view returns (uint256)",
-  "function stakingRewards(address) view returns (uint256)",
-  "function researchRewards(address) view returns (uint256)",
-  "function lastClaimTime(address) view returns (uint256)",
-  "event TokenRewardDistributed(address indexed recipient, uint256 ethAmount, uint256 tokenAmount, string rewardType)"
 ];
 
 // Helper Functions

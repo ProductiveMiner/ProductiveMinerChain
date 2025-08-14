@@ -7,7 +7,7 @@ class ContractService {
     this.signer = null;
     this.isConnected = false;
     this.contractAddress = process.env.CONTRACT_ADDRESS || '0xc7374F27c695112B81495ECF28b90aD441CCf4b9';
-    this.tokenAddress = process.env.TOKEN_ADDRESS || '0x1a963782dB0e5502defb04d662B7031FaB9e15E2'; // MINEDTokenFixed
+    this.tokenAddress = process.env.TOKEN_ADDRESS || '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3'; // MINEDTokenStandalone
     this.privateKey = process.env.PRIVATE_KEY || null;
     this.rpcUrl = process.env.CONTRACT_RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC';
   }

@@ -23,8 +23,10 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000, // Increased timeout
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 10000, // Increased timeout for production
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: false // Allow self-signed certificates for RDS
+  } : false, // Disable SSL for local development
   // Add retry logic
   retryDelay: 1000,
   maxRetries: 3

@@ -115,7 +115,7 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
             </div>
           </motion.div>
 
-          {/* ETH Reward section */}
+          {/* MINED Token Reward section */}
           <motion.div
             className="reward-section"
             initial={{ opacity: 0, y: 20 }}
@@ -123,11 +123,11 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
             transition={{ delay: 0.5 }}
           >
             <div className="reward-icon">
-              <FaCoins />
+              🪙
             </div>
             <div className="reward-amount">
-              <span className="reward-label">ETH Reward Earned</span>
-              <span className="reward-value">{reward} ETH</span>
+              <span className="reward-label">MINED Tokens Earned</span>
+              <span className="reward-value">{reward} MINED</span>
             </div>
           </motion.div>
 
@@ -219,14 +219,14 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
                   scale: 0
                 }}
                 animate={{ 
-                  x: (Math.random() - 0.5) * 200,
-                  y: (Math.random() - 0.5) * 200,
+                          x: 0,
+        y: 0,
                   opacity: 0,
                   scale: 1
                 }}
                 transition={{ 
                   duration: 2,
-                  delay: 0.8 + Math.random() * 0.5,
+                  delay: 1.0,
                   ease: "easeOut"
                 }}
               />

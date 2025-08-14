@@ -1,8 +1,8 @@
-// ProductiveMiner API Configuration
-// Updated for AWS ECS deployment with proper domain URLs
+// MINED Token API Configuration
+// ERC20 Token Only - No Smart Contract Integration
 
 const API_CONFIG = {
-  // Backend API endpoints - Using proper domain
+  // Backend API endpoints - Using production domain
   BACKEND_API: {
     BASE_URL: process.env.REACT_APP_API_URL || 'https://api.productiveminer.org',
     ENDPOINTS: {
@@ -22,7 +22,7 @@ const API_CONFIG = {
     }
   },
   
-  // Mathematical Engine endpoints - Using proper domain
+  // Mathematical Engine endpoints - Using production domain
   MATHEMATICAL_ENGINE: {
     BASE_URL: process.env.REACT_APP_MATH_ENGINE_URL || 'https://api.productiveminer.org',
     ENDPOINTS: {
@@ -62,13 +62,12 @@ const API_CONFIG = {
     RETRY_DELAY: 1000
   },
 
-  // Ethereum configuration
+  // Ethereum configuration - ERC20 Token Only
   ETHEREUM: {
     NETWORK_ID: 11155111, // Sepolia Testnet
     CHAIN_ID: 11155111,
     RPC_URL: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Live Alchemy RPC URL
-    CONTRACT_ADDRESS: '0xB576afEfB7C466B0146ee81A9256a3DE1ACF2146', // ProductiveMinerFixed contract (CORRECTED)
-    TOKEN_ADDRESS: '0xC46C90F37B83868fA46A3653daf3C3b49a4f1604', // MINEDTokenFixed contract (CORRECTED)
+    TOKEN_ADDRESS: '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3', // MINEDTokenStandalone ERC20 contract
     EXPLORER_URL: 'https://sepolia.etherscan.io'
   }
 };

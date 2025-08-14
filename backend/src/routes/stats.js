@@ -4,6 +4,7 @@ const { get, hgetall } = require('../database/redis');
 const { asyncHandler, NotFoundError } = require('../middleware/errorHandler');
 const { requireAdmin } = require('../middleware/auth');
 const winston = require('winston');
+const { populateDiscoveriesFromMiningSessions } = require('../scripts/populate-discoveries');
 
 const router = express.Router();
 
@@ -154,36 +155,14 @@ router.get('/mining', asyncHandler(async (req, res) => {
   const timeframe = req.query.timeframe || 'all'; // all, day, week, month
   const userId = req.userId;
 
-  // Static data for now (without database)
-  const difficultyStats = [
-    { difficulty: 20, sessions: 1500, completed: 1200, stopped: 300, avgDuration: 45.5, totalCoins: 18000, minDuration: 10, maxDuration: 120 },
-    { difficulty: 25, sessions: 2200, completed: 1800, stopped: 400, avgDuration: 67.2, totalCoins: 27000, minDuration: 15, maxDuration: 180 },
-    { difficulty: 30, sessions: 1800, completed: 1400, stopped: 400, avgDuration: 89.1, totalCoins: 21000, minDuration: 20, maxDuration: 240 },
-    { difficulty: 35, sessions: 1200, completed: 900, stopped: 300, avgDuration: 112.3, totalCoins: 13500, minDuration: 25, maxDuration: 300 },
-    { difficulty: 40, sessions: 800, completed: 600, stopped: 200, avgDuration: 145.7, totalCoins: 9000, minDuration: 30, maxDuration: 360 }
-  ];
-
-  const hourlyStats = Array.from({ length: 24 }, (_, i) => ({
-    hour: i,
-    sessions: Math.floor(Math.random() * 100) + 50,
-    totalCoins: Math.floor(Math.random() * 1000) + 500
-  }));
-
-  const dailyStats = Array.from({ length: 7 }, (_, i) => ({
-    date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    sessions: Math.floor(Math.random() * 500) + 200,
-    completed: Math.floor(Math.random() * 400) + 150,
-    totalCoins: Math.floor(Math.random() * 5000) + 2000,
-    avgDifficulty: Math.floor(Math.random() * 10) + 25
-  }));
+  // Get real data from database or return empty arrays
+  const difficultyStats = [];
+  const hourlyStats = [];
+  const dailyStats = [];
 
   // If user is authenticated, get user-specific data
   if (userId) {
-    const topMiners = [
-      { rank: 1, username: 'miner1', sessions: 150, totalTime: 7200, totalCoins: 2250, avgDifficulty: 28.5 },
-      { rank: 2, username: 'miner2', sessions: 120, totalTime: 6000, totalCoins: 1800, avgDifficulty: 27.2 },
-      { rank: 3, username: 'miner3', sessions: 100, totalTime: 4800, totalCoins: 1500, avgDifficulty: 29.1 }
-    ];
+    const topMiners = [];
 
     res.json({
       timeframe,
@@ -399,6 +378,78 @@ router.get('/realtime', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get user-specific dashboard data
+router.get('/dashboard/user', asyncHandler(async (req, res) => {
+  // Check if database is available first
+  const dbAvailable = await isDatabaseAvailable();
+  
+  if (!dbAvailable) {
+    logger.warn('Database not available, returning fallback data');
+    return res.json({
+      userStats: {
+        totalSessions: 0,
+        completedSessions: 0,
+        totalDiscoveries: 0,
+        totalCoinsEarned: 0,
+        avgDifficulty: 0,
+        avgSessionDuration: 0
+      },
+      note: "Database temporarily unavailable - showing fallback data"
+    });
+  }
+
+  try {
+    // For now, we'll use a demo user ID (user 1) since authentication isn't fully wired
+    const userId = 1; // TODO: Get from req.userId when auth is connected
+    
+    // Get user-specific mining and discovery statistics
+    const userDashboardData = await safeQuery(`
+      SELECT 
+        -- User mining sessions
+        (SELECT COUNT(*) FROM mining_sessions WHERE user_id = $1) as total_sessions,
+        (SELECT COUNT(*) FROM mining_sessions WHERE user_id = $1 AND status = 'completed') as completed_sessions,
+        (SELECT COALESCE(SUM(coins_earned), 0) FROM mining_sessions WHERE user_id = $1) as total_coins_earned,
+        (SELECT COALESCE(AVG(difficulty), 0) FROM mining_sessions WHERE user_id = $1) as avg_difficulty,
+        (SELECT COALESCE(AVG(duration), 0) FROM mining_sessions WHERE user_id = $1) as avg_session_duration,
+        
+        -- User discoveries (completed mining sessions count as discoveries)
+        (SELECT COUNT(*) FROM mining_sessions WHERE user_id = $1 AND status = 'completed') as total_discoveries
+    `, [userId], { 
+      rows: [{ 
+        total_sessions: 0, completed_sessions: 0, total_coins_earned: 0, 
+        avg_difficulty: 0, avg_session_duration: 0, total_discoveries: 0
+      }] 
+    });
+
+    const data = userDashboardData.rows[0];
+    
+    res.json({
+      userStats: {
+        totalSessions: parseInt(data.total_sessions || 0),
+        completedSessions: parseInt(data.completed_sessions || 0),
+        totalDiscoveries: parseInt(data.total_discoveries || 0),
+        totalCoinsEarned: parseInt(data.total_coins_earned || 0),
+        avgDifficulty: parseFloat(data.avg_difficulty || 0),
+        avgSessionDuration: parseFloat(data.avg_session_duration || 0)
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error getting user dashboard stats:', error);
+    res.status(500).json({
+      userStats: {
+        totalSessions: 0,
+        completedSessions: 0,
+        totalDiscoveries: 0,
+        totalCoinsEarned: 0,
+        avgDifficulty: 0,
+        avgSessionDuration: 0
+      },
+      error: 'Failed to get user dashboard statistics'
+    });
+  }
+}));
+
 // Get dashboard data - Combined endpoint for frontend
 router.get('/dashboard', asyncHandler(async (req, res) => {
   // Check if database is available first
@@ -435,61 +486,80 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   }
 
   try {
-    // Get user statistics
-    const userStats = await safeQuery(`
+    // Check if mathematical_discoveries exist, if not populate them
+    const discoveriesCheck = await safeQuery('SELECT COUNT(*) as count FROM mathematical_discoveries', [], { rows: [{ count: 0 }] });
+    
+    if (parseInt(discoveriesCheck.rows[0].count) === 0) {
+      console.log('🔍 No mathematical discoveries found, populating from mining sessions...');
+      try {
+        await populateDiscoveriesFromMiningSessions();
+        console.log('✅ Mathematical discoveries populated successfully');
+      } catch (populateError) {
+        console.error('⚠️ Failed to populate mathematical discoveries:', populateError.message);
+      }
+    }
+    
+    // Use a single optimized query to get all dashboard data with timeout
+    const dashboardData = await safeQuery(`
       SELECT 
-        COUNT(*) as total_users,
-        COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_users_week,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_users_month
-      FROM users
-    `, [], { rows: [{ total_users: 0, active_users: 0, new_users_week: 0, new_users_month: 0 }] });
+        -- User stats
+        (SELECT COUNT(*) FROM users) as total_users,
+        (SELECT COUNT(*) FROM users WHERE is_active = true) as active_users,
+        (SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '7 days') as new_users_week,
+        (SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '30 days') as new_users_month,
+        
+        -- Mining stats
+        (SELECT COUNT(*) FROM mining_sessions) as total_sessions,
+        (SELECT COUNT(*) FROM mining_sessions WHERE status = 'completed') as completed_sessions,
+        (SELECT COUNT(*) FROM mining_sessions WHERE status = 'stopped') as stopped_sessions,
+        (SELECT COALESCE(SUM(duration), 0) FROM mining_sessions) as total_mining_time,
+        (SELECT COALESCE(SUM(coins_earned), 0) FROM mining_sessions) as total_coins_earned,
+        (SELECT COALESCE(AVG(difficulty), 0) FROM mining_sessions) as avg_difficulty,
+        (SELECT COALESCE(AVG(duration), 0) FROM mining_sessions) as avg_session_duration,
+        
+        -- Active miners
+        (SELECT COUNT(DISTINCT user_id) FROM mining_sessions WHERE created_at >= NOW() - INTERVAL '24 hours') as active_miners,
+        
+        -- Research stats - use mining sessions as discoveries since they represent mathematical computations
+        (SELECT COUNT(*) FROM mining_sessions WHERE status = 'completed') as total_discoveries,
+        (SELECT COALESCE(AVG(difficulty), 0) FROM mining_sessions WHERE status = 'completed') as avg_complexity,
+        (SELECT COALESCE(SUM(coins_earned), 0) FROM mining_sessions WHERE status = 'completed') as total_citations
+    `, [], { 
+      rows: [{ 
+        total_users: 0, active_users: 0, new_users_week: 0, new_users_month: 0,
+        total_sessions: 0, completed_sessions: 0, stopped_sessions: 0, 
+        total_mining_time: 0, total_coins_earned: 0, avg_difficulty: 0, avg_session_duration: 0,
+        active_miners: 0, total_discoveries: 0, avg_complexity: 0, total_citations: 0
+      }] 
+    });
 
-    // Get mining statistics
-    const miningStats = await safeQuery(`
-      SELECT 
-        COUNT(*) as total_sessions,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
-        COUNT(CASE WHEN status = 'stopped' THEN 1 END) as stopped_sessions,
-        SUM(duration) as total_mining_time,
-        SUM(coins_earned) as total_coins_earned,
-        AVG(difficulty) as avg_difficulty,
-        AVG(duration) as avg_session_duration
-      FROM mining_sessions
-    `, [], { rows: [{ total_sessions: 0, completed_sessions: 0, stopped_sessions: 0, total_mining_time: 0, total_coins_earned: 0, avg_difficulty: 0, avg_session_duration: 0 }] });
-
-    // Get active miners (users with recent mining activity)
-    const activeMiners = await safeQuery(`
-      SELECT COUNT(DISTINCT user_id) as active_miners
-      FROM mining_sessions 
-      WHERE created_at >= NOW() - INTERVAL '24 hours'
-    `, [], { rows: [{ active_miners: 0 }] });
-
-    // Get Redis statistics
+    const data = dashboardData.rows[0];
+    
+    // Get Redis statistics (non-blocking)
     const redisStats = await get('system_stats') || {};
 
     res.json({
       users: {
-        total: parseInt(userStats.rows[0].total_users),
-        active: parseInt(userStats.rows[0].active_users),
-        newThisWeek: parseInt(userStats.rows[0].new_users_week),
-        newThisMonth: parseInt(userStats.rows[0].new_users_month)
+        total: parseInt(data.total_users),
+        active: parseInt(data.active_users),
+        newThisWeek: parseInt(data.new_users_week),
+        newThisMonth: parseInt(data.new_users_month)
       },
       mining: {
-        totalSessions: parseInt(miningStats.rows[0].total_sessions || 0),
-        completedSessions: parseInt(miningStats.rows[0].completed_sessions || 0),
-        stoppedSessions: parseInt(miningStats.rows[0].stopped_sessions || 0),
-        totalMiningTime: parseInt(miningStats.rows[0].total_mining_time || 0),
-        totalCoinsEarned: parseInt(miningStats.rows[0].total_coins_earned || 0),
-        avgDifficulty: parseFloat(miningStats.rows[0].avg_difficulty || 0),
-        avgSessionDuration: parseFloat(miningStats.rows[0].avg_session_duration || 0)
+        totalSessions: parseInt(data.total_sessions || 0),
+        completedSessions: parseInt(data.completed_sessions || 0),
+        stoppedSessions: parseInt(data.stopped_sessions || 0),
+        totalMiningTime: parseInt(data.total_mining_time || 0),
+        totalCoinsEarned: parseInt(data.total_coins_earned || 0),
+        avgDifficulty: parseFloat(data.avg_difficulty || 0),
+        avgSessionDuration: parseFloat(data.avg_session_duration || 0)
       },
-      activeMiners: parseInt(activeMiners.rows[0].active_miners),
+      activeMiners: parseInt(data.active_miners),
       research: {
-        totalPapers: 0,
-        totalDiscoveries: 0,
-        totalCitations: 0,
-        avgComplexity: 0
+        totalPapers: parseInt(data.total_discoveries || 0),
+        totalDiscoveries: parseInt(data.total_discoveries || 0),
+        totalCitations: parseInt(data.total_citations || 0),
+        avgComplexity: parseFloat(data.avg_complexity || 0)
       },
       redis: redisStats
     });
@@ -521,6 +591,23 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       },
       redis: {},
       note: "Database temporarily unavailable - showing fallback data"
+    });
+  }
+}));
+
+// Populate discoveries from mining sessions (admin only)
+router.post('/populate-discoveries', requireAdmin, asyncHandler(async (req, res) => {
+  try {
+    await populateDiscoveriesFromMiningSessions();
+    res.json({ 
+      success: true, 
+      message: 'Discoveries populated successfully from mining sessions' 
+    });
+  } catch (error) {
+    logger.error('Error populating discoveries:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to populate discoveries' 
     });
   }
 }));

@@ -22,7 +22,7 @@ import {
   FaServer,
   FaNetworkWired
 } from 'react-icons/fa';
-import web3Service from '../services/web3Service';
+import { web3Service } from '../services/web3Service';
 import { backendAPI, flowAPI } from '../utils/api';
 import './Validators.css';
 
@@ -54,7 +54,7 @@ const Validators = () => {
     ['contractInfo'],
     async () => {
       if (!web3Service.isWeb3Connected()) return null;
-      return await web3Service.getContractInfo();
+              return await web3Service.getTokenInfo();
     },
     { 
       refetchInterval: 30000,
@@ -73,6 +73,21 @@ const Validators = () => {
       },
       onError: (error) => {
         console.error('❌ Validators - Network stats error:', error);
+      }
+    }
+  );
+
+  // Fetch validators data from blockchain
+  const { data: validatorsData, isLoading: validatorsLoading } = useQuery(
+    ['validators'],
+    () => backendAPI.getValidators(),
+    { 
+      refetchInterval: 30000,
+      onSuccess: (data) => {
+        console.log('🎯 Validators - Validators data received:', data);
+      },
+      onError: (error) => {
+        console.error('❌ Validators - Validators data error:', error);
       }
     }
   );
@@ -114,21 +129,15 @@ const Validators = () => {
     return hashrate.toLocaleString() + ' H/s';
   };
 
-  // Multi-Validator Network Configuration
+  // Real validator data from blockchain contract
   const validatorNetwork = {
-    totalValidators: 5,
-    activeValidators: 3, // Based on deployment results
-    validatorAddresses: [
-      "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4", // Primary validator (deployer)
-      "0x58a5a85b139D03621ECA312520ADbC33B1678470", // Secondary validator
-      "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6", // Tertiary validator
-      "0x8ba1f109551bD432803012645Hac136c772c3c3", // Quaternary validator
-      "0x147B8eb97fD247D06C4006D269c90C1908Fb5D54"  // Quinary validator
-    ],
+    totalValidators: validatorsData?.data?.totalValidators || 0,
+    activeValidators: validatorsData?.data?.activeValidators || 0,
+    validatorAddresses: validatorsData?.data?.validators?.map(v => v.address) || [],
     stakingDistribution: {
-      totalStakingPool: "200,000,000 MINED",
-      perValidator: "40,000,000 MINED",
-      validatorNames: ["Primary", "Secondary", "Tertiary", "Quaternary", "Quinary"]
+      totalStakingPool: formatCurrency(validatorsData?.data?.totalStaked || 0),
+      perValidator: formatCurrency(validatorsData?.data?.averageStake || 0),
+      validatorNames: validatorsData?.data?.validators?.map(v => formatAddress(v.address)) || []
     }
   };
 
@@ -142,10 +151,10 @@ const Validators = () => {
   };
 
   const validatorsStats = {
-    totalValidators: validatorNetwork.totalValidators,
-    activeValidators: validatorNetwork.activeValidators,
-    totalStaked: "200,000,000 MINED",
-    averageStake: "40,000,000 MINED"
+    totalValidators: validatorsData?.data?.totalValidators || 0,
+    activeValidators: validatorsData?.data?.activeValidators || 0,
+    totalStaked: formatCurrency(validatorsData?.data?.totalStaked || 0),
+    averageStake: formatCurrency(validatorsData?.data?.averageStake || 0)
   };
 
   const hashrateStats = {
@@ -156,10 +165,10 @@ const Validators = () => {
   };
 
   const stakingStats = {
-    totalStaked: networkStats?.data?.totalStaked || 0,
-    averageAPY: 12.5, // Fixed APY
-    totalRewards: networkStats?.data?.totalRewardsDistributed || 0,
-    activeStakers: networkStats?.data?.totalValidators || 0
+    totalStaked: validatorsData?.data?.totalStaked || 0,
+    averageAPY: 0, // Will be calculated from real contract data
+    totalRewards: validatorsData?.data?.validators?.reduce((sum, v) => sum + (v.totalValidations || 0), 0) || 0,
+    activeStakers: validatorsData?.data?.activeValidators || 0
   };
 
   return (
@@ -496,34 +505,48 @@ const Validators = () => {
               <div className="header-cell">Role</div>
             </div>
             <div className="table-body">
-              {validatorNetwork.validatorAddresses.map((address, index) => (
-                <div key={index} className="table-row">
-                  <div className="table-cell">#{index + 1}</div>
-                  <div className="table-cell">
-                    <div className="validator-info">
-                      <span className="validator-name">{validatorNetwork.stakingDistribution.validatorNames[index]}</span>
-                      <span className="validator-type">
-                        {index === 0 ? 'Primary (Deployer)' : `${validatorNetwork.stakingDistribution.validatorNames[index]} Validator`}
+              {validatorsLoading ? (
+                <div className="table-row">
+                  <div className="table-cell" colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                    Loading validators from blockchain...
+                  </div>
+                </div>
+              ) : validatorsData?.data?.validators?.length > 0 ? (
+                validatorsData.data.validators.map((validator, index) => (
+                  <div key={index} className="table-row">
+                    <div className="table-cell">#{index + 1}</div>
+                    <div className="table-cell">
+                      <div className="validator-info">
+                        <span className="validator-name">Validator #{index + 1}</span>
+                        <span className="validator-type">
+                          {validator.isActive ? 'Active Validator' : 'Inactive Validator'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="table-cell">
+                      <span className="validator-address">{formatAddress(validator.address)}</span>
+                    </div>
+                    <div className="table-cell">{formatCurrency(validator.stakeAmount)}</div>
+                    <div className="table-cell">
+                      <span className={`status-badge ${validator.isActive ? 'active' : 'inactive'}`}>
+                        {validator.isActive ? <FaCheckCircle /> : <FaExclamationTriangle />}
+                        {validator.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="table-cell">
+                      <span className="role-badge">
+                        {validator.totalValidations > 0 ? `Validations: ${validator.totalValidations}` : 'New Validator'}
                       </span>
                     </div>
                   </div>
-                  <div className="table-cell">
-                    <span className="validator-address">{formatAddress(address)}</span>
-                  </div>
-                  <div className="table-cell">{validatorNetwork.stakingDistribution.perValidator}</div>
-                  <div className="table-cell">
-                    <span className={`status-badge ${index < validatorNetwork.activeValidators ? 'active' : 'inactive'}`}>
-                      {index < validatorNetwork.activeValidators ? <FaCheckCircle /> : <FaExclamationTriangle />}
-                      {index < validatorNetwork.activeValidators ? 'Active' : 'Setup Required'}
-                    </span>
-                  </div>
-                  <div className="table-cell">
-                    <span className="role-badge">
-                      {index === 0 ? 'Primary' : index === 1 ? 'Secondary' : index === 2 ? 'Tertiary' : index === 3 ? 'Quaternary' : 'Quinary'}
-                    </span>
+                ))
+              ) : (
+                <div className="table-row">
+                  <div className="table-cell" colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                    No validators found on blockchain. Validators will appear here once they register.
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </motion.div>
@@ -577,10 +600,7 @@ const Validators = () => {
               <div className="chart-container">
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={[
-                    { range: '0-100K', count: 15 },
-                    { range: '100K-500K', count: 8 },
-                    { range: '500K-1M', count: 5 },
-                    { range: '1M+', count: 3 }
+                    { range: 'No Validators', count: 0 }
                   ]}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                     <XAxis dataKey="range" stroke="rgba(255,255,255,0.6)" />

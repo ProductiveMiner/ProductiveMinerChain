@@ -89,7 +89,7 @@ const MinedToken = () => {
         <div className="hero-content">
           <h1>🪙 MINED Token (Enhanced)</h1>
           <p className="hero-subtitle">
-            The revolutionary enhanced token powering mathematical discovery mining with 15B asymptotic emission model
+            The revolutionary enhanced token powering mathematical discovery mining with 1B asymptotic emission model
           </p>
           
           {!isConnected ? (
@@ -176,17 +176,17 @@ const MinedToken = () => {
           
           <div className="stats-grid">
             <div className="stat-card">
-              <div className="stat-number">750M</div>
+              <div className="stat-number">1B</div>
               <div className="stat-label">Initial Supply</div>
             </div>
             
             <div className="stat-card">
-              <div className="stat-number">15B</div>
+              <div className="stat-number">1.5B</div>
               <div className="stat-label">Soft Cap</div>
             </div>
             
             <div className="stat-card">
-              <div className="stat-number">14.25B</div>
+              <div className="stat-number">500M</div>
               <div className="stat-label">Available for Mining</div>
             </div>
             
@@ -210,17 +210,17 @@ const MinedToken = () => {
               className="link-card"
             >
               <h3>🪙 MINED Token Contract</h3>
-              <p>Enhanced asymptotic token with 15B soft cap</p>
+              <p>Enhanced asymptotic token with 1.5B soft cap</p>
             </a>
             
             <a 
-              href={`https://sepolia.etherscan.io/address/${MINED_TOKEN_CONFIG.contracts.productiveMiner}`}
+              href="https://productiveminer.org"
               target="_blank"
               rel="noopener noreferrer"
               className="link-card"
             >
-              <h3>⛏️ ProductiveMiner Contract</h3>
-              <p>Mathematical discovery mining contract</p>
+              <h3>🌐 ProductiveMiner Platform</h3>
+              <p>Mathematical discovery and research platform</p>
             </a>
             
             <a 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaBars, FaTimes, FaWallet, FaSearch, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
-import web3Service from '../services/web3Service';
+import { web3Service } from '../services/web3Service';
 import './Navbar.css';
 
 const Navbar = () => {

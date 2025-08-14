@@ -22,7 +22,7 @@ import {
   FaExclamationTriangle,
   FaCheckCircle
 } from 'react-icons/fa';
-import web3Service from '../services/web3Service';
+import { web3Service } from '../services/web3Service';
 import { backendAPI, mathEngineAPI } from '../utils/api';
 import './Dashboard.css';
 
@@ -51,12 +51,12 @@ const Dashboard = () => {
       initializeWeb3();
     }, []);
 
-    // Fetch contract information from Web3Service
-    const { data: contractInfo, isLoading: contractLoading } = useQuery(
-      ['contractInfo'],
+    // Fetch token information from Web3Service
+    const { data: tokenInfo, isLoading: tokenInfoLoading } = useQuery(
+      ['tokenInfo'],
       async () => {
         if (!web3Service.isWeb3Connected()) return null;
-        return await web3Service.getContractInfo();
+        return await web3Service.getTokenInfo();
       },
       { 
         refetchInterval: 30000,
@@ -64,12 +64,12 @@ const Dashboard = () => {
       }
     );
 
-    // Fetch miner statistics from Web3Service
-    const { data: minerStats, isLoading: minerLoading } = useQuery(
-      ['minerStats', currentAccount],
+    // Fetch token balance for current account
+    const { data: tokenBalance, isLoading: balanceLoading } = useQuery(
+      ['tokenBalance', currentAccount],
       async () => {
         if (!web3Service.isWeb3Connected() || !currentAccount) return null;
-        return await web3Service.getMinerStats(currentAccount);
+        return await web3Service.getTokenBalance();
       },
       { 
         refetchInterval: 30000,
@@ -101,6 +101,21 @@ const Dashboard = () => {
         },
         onError: (error) => {
           console.error('❌ Dashboard - Dashboard data error:', error);
+        }
+      }
+    );
+
+    // Fetch user-specific dashboard data
+    const { data: userDashboardData, isLoading: userDashboardLoading } = useQuery(
+      ['userDashboardData'],
+      () => backendAPI.getUserDashboardData(),
+      { 
+        refetchInterval: 30000,
+        onSuccess: (data) => {
+          console.log('🎯 Dashboard - User dashboard data received:', data);
+        },
+        onError: (error) => {
+          console.error('❌ Dashboard - User dashboard data error:', error);
         }
       }
     );
@@ -233,11 +248,11 @@ const Dashboard = () => {
 
     // Prepare chart data
     const networkStats = {
-      totalStaked: contractInfo?.totalStaked || 0,
-      maxDifficulty: contractInfo?.maxDifficulty || 0,
-      baseReward: contractInfo?.baseReward || 0,
-      paused: contractInfo?.paused || false,
-      owner: contractInfo?.owner || '0x0000...0000'
+      totalStaked: stakingInfo?.totalStaked || 0,
+      maxDifficulty: 0, // Not applicable for ERC20
+      baseReward: 0, // Not applicable for ERC20
+      paused: false, // Not applicable for ERC20
+      owner: tokenInfo?.address || '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3'
     };
 
     // Use dashboard data for critical statistics
@@ -253,10 +268,13 @@ const Dashboard = () => {
     };
 
     const userStats = {
-      totalSessions: minerStats?.totalSessions || 0,
-      totalDiscoveries: minerStats?.totalDiscoveries || 0,
-      totalRewards: minerStats?.totalRewards || 0,
-      stakedAmount: minerStats?.stakedAmount || 0,
+      totalSessions: userDashboardData?.userStats?.totalSessions || 0,
+      totalDiscoveries: userDashboardData?.userStats?.totalDiscoveries || 0,
+      totalCoinsEarned: userDashboardData?.userStats?.totalCoinsEarned || 0,
+      avgDifficulty: userDashboardData?.userStats?.avgDifficulty || 0,
+      avgSessionDuration: userDashboardData?.userStats?.avgSessionDuration || 0,
+      totalRewards: tokenBalance || 0,
+      stakedAmount: stakingInfo?.stakedAmount || 0,
       pendingRewards: stakingInfo?.rewards || 0
     };
 

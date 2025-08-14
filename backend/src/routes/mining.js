@@ -604,9 +604,9 @@ router.post('/stop', asyncHandler(async (req, res) => {
   });
 }));
 
-// Get mining statistics
+// Get public mining statistics (no authentication required)
 router.get('/stats', asyncHandler(async (req, res) => {
-  const userId = req.userId;
+  const userId = req.userId || 1; // Default to user 1 if no authentication
 
   // Try DB queries with fast fallback
   const userStats = await tryQuery(

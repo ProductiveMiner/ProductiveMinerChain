@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import web3Service from '../services/web3Service';
+import { web3Service } from '../services/web3Service';
 import minedTokenService from '../services/minedTokenService';
 import CONTRACT_CONFIG from '../config/contracts';
 import { 
@@ -45,7 +45,8 @@ const Wallet = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [contractInfo, setContractInfo] = useState(null);
-  const [minerStats, setMinerStats] = useState(null);
+  const [tokenInfo, setTokenInfo] = useState(null);
+
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showSendModal, setShowSendModal] = useState(false);
@@ -72,9 +73,13 @@ const Wallet = () => {
       setMinedBalance(newMinedBalance);
       console.log('Updated MINED token balance:', newMinedBalance);
       
-      // Refresh miner stats
-      const stats = await web3Service.getMinerStats(web3Service.getCurrentAccount());
-      setMinerStats(stats);
+      // Refresh token balance
+      const tokenBalance = await web3Service.getTokenBalance();
+      setMinedBalance(tokenBalance);
+      
+      // Refresh token information
+      const info = await web3Service.getTokenInfo();
+      setTokenInfo(info);
       
       // Refresh staking info
       const staking = await web3Service.getStakingInfo(web3Service.getCurrentAccount());
@@ -101,16 +106,16 @@ const Wallet = () => {
           setAddress(web3Service.getCurrentAccount());
           
           // Get contract info
-          const info = await web3Service.getContractInfo();
+          const info = await web3Service.getTokenInfo();
           setContractInfo(info);
+          setTokenInfo(info);
           
           // Initialize MINED token service
           await minedTokenService.initialize();
           
           // Get miner stats if account is available
           if (web3Service.getCurrentAccount()) {
-            const stats = await web3Service.getMinerStats(web3Service.getCurrentAccount());
-            setMinerStats(stats);
+
             
             // Get staking info
             const staking = await web3Service.getStakingInfo(web3Service.getCurrentAccount());
@@ -131,7 +136,7 @@ const Wallet = () => {
           web3Service.setupAccountListener((account) => {
             setAddress(account);
             if (account) {
-              web3Service.getMinerStats(account).then(setMinerStats);
+              web3Service.getTokenBalance().then(setTokenBalance);
               web3Service.getStakingInfo(account).then((staking) => {
                 setStakingInfo({
                   staked: staking?.stakedAmount || 0,
@@ -191,7 +196,7 @@ const Wallet = () => {
     setStakingInfo({ staked: 0, rewards: 0, apy: 0, validators: [] });
     setMiningInfo({ isMining: false, currentEngine: null, hashrate: 0, rewards: 0 });
     setContractInfo(null);
-    setMinerStats(null);
+    
     setError(null);
   };
 
@@ -250,7 +255,7 @@ const Wallet = () => {
   const handleClaimRewards = async () => {
     try {
       setLoading(true);
-      const result = await web3Service.claimRewards();
+      const result = await web3Service.claimStakingRewards();
       console.log('Claim rewards successful:', result);
       
       // Refresh data
@@ -514,9 +519,9 @@ const Wallet = () => {
                 <FaChartLine />
               </div>
               <div className="card-content">
-                <h3>Total Rewards</h3>
-                <p className="balance">{formatBalance(minerStats?.totalRewards || 0)}</p>
-                <p className="description">Earned from mining</p>
+                <h3>Token Balance</h3>
+                <p className="balance">{formatBalance(minedBalance || 0)} MINED</p>
+                <p className="description">Current MINED token balance</p>
               </div>
             </div>
 
@@ -544,62 +549,60 @@ const Wallet = () => {
           </div>
         </motion.div>
 
-        {/* Mining Statistics */}
-        {minerStats && (
-          <motion.div
-            className="mining-stats"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <h3>Mining Statistics</h3>
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <FaRocket />
-                </div>
-                <div className="stat-content">
-                  <h4>Total Sessions</h4>
-                  <p className="stat-value">{minerStats.totalSessions || 0}</p>
-                  <p className="stat-description">Completed mining sessions</p>
-                </div>
+        {/* Token Statistics */}
+        <motion.div
+          className="token-stats"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <h3>Token Statistics</h3>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-icon">
+                <FaCoins />
               </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <FaCoins />
-                </div>
-                <div className="stat-content">
-                  <h4>Total Discoveries</h4>
-                  <p className="stat-value">{minerStats.totalDiscoveries || 0}</p>
-                  <p className="stat-description">Mathematical breakthroughs</p>
-                </div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <FaChartLine />
-                </div>
-                <div className="stat-content">
-                  <h4>Total Rewards</h4>
-                  <p className="stat-value">{formatCurrency(minerStats.totalRewards || 0)}</p>
-                  <p className="stat-description">Earned MINED tokens</p>
-                </div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <FaShieldAlt />
-                </div>
-                <div className="stat-content">
-                  <h4>Staked Amount</h4>
-                  <p className="stat-value">{formatCurrency(minerStats.stakedAmount || 0)}</p>
-                  <p className="stat-description">Currently staked</p>
-                </div>
+              <div className="stat-content">
+                <h4>Token Balance</h4>
+                <p className="stat-value">{formatBalance(minedBalance || 0)} MINED</p>
+                <p className="stat-description">Current MINED token balance</p>
               </div>
             </div>
-          </motion.div>
-        )}
+
+            <div className="stat-card">
+              <div className="stat-icon">
+                <FaShieldAlt />
+              </div>
+              <div className="stat-content">
+                <h4>Staked Amount</h4>
+                <p className="stat-value">{formatCurrency(stakingInfo.staked)}</p>
+                <p className="stat-description">Currently staked tokens</p>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-icon">
+                <FaChartLine />
+              </div>
+              <div className="stat-content">
+                <h4>Pending Rewards</h4>
+                <p className="stat-value">{formatCurrency(stakingInfo.rewards)}</p>
+                <p className="stat-description">Available to claim</p>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-icon">
+                <FaRocket />
+              </div>
+              <div className="stat-content">
+                <h4>APY Rate</h4>
+                <p className="stat-value">{stakingInfo.apy || 12.5}%</p>
+                <p className="stat-description">Annual percentage yield</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Action Buttons */}
         <motion.div
@@ -872,7 +875,7 @@ const Wallet = () => {
                   <p className="balance-description">
                     {minedTokenService.isTokenDeployed() 
                       ? 'Your actual MINED token balance from the blockchain'
-                      : 'Mock balance for development (token not deployed yet)'
+                      : 'Balance not available'
                     }
                   </p>
                 </div>
@@ -902,30 +905,34 @@ const Wallet = () => {
                   <div className="info-grid">
                     <div className="info-item">
                       <span>Token Name:</span>
-                      <span>MINED</span>
+                      <span>{tokenInfo?.name || 'MINED'}</span>
                     </div>
                     <div className="info-item">
                       <span>Token Symbol:</span>
-                      <span>MINED</span>
+                      <span>{tokenInfo?.symbol || 'MINED'}</span>
                     </div>
                     <div className="info-item">
                       <span>Decimals:</span>
-                      <span>18</span>
+                      <span>{tokenInfo?.decimals || '18'}</span>
                     </div>
                     <div className="info-item">
                       <span>Total Supply:</span>
-                      <span>1,000,000,000 MINED</span>
+                      <span>{tokenInfo?.totalSupply ? 
+                        `${web3Service.web3?.utils?.fromWei ? 
+                          web3Service.web3.utils.fromWei(tokenInfo.totalSupply, 'ether') : 
+                          (parseInt(tokenInfo.totalSupply) / 1e18).toLocaleString()
+                        } MINED` : 
+                        'Loading...'
+                      }</span>
                     </div>
                     <div className="info-item">
                       <span>Contract Address:</span>
-                      <span className="address">{CONTRACT_CONFIG.MINED_TOKEN.address}</span>
+                      <span className="address">{tokenInfo?.address || CONTRACT_CONFIG.MINED_TOKEN.address}</span>
                     </div>
                     <div className="info-item">
                       <span>Status:</span>
-                      <span className={`status ${minedTokenService.getTokenStatus()}`}>
-                        {minedTokenService.getTokenStatus() === 'connected' ? 'Connected' :
-                         minedTokenService.getTokenStatus() === 'deployed_not_connected' ? 'Deployed' :
-                         'Not Deployed'}
+                      <span className={`status ${tokenInfo ? 'connected' : 'deployed_not_connected'}`}>
+                        {tokenInfo ? 'Connected' : 'Deployed'}
                       </span>
                     </div>
                   </div>

@@ -352,26 +352,8 @@ async function createBlock(workType, difficulty) {
     gasLimit: 1000000
   };
   
-  // Generate mock transactions for the block
-  const numTransactions = Math.floor(Math.random() * 10) + 5; // 5-14 txs
-  for (let i = 0; i < numTransactions; i++) {
-    const tx = {
-      hash: '0x' + crypto.randomBytes(32).toString('hex'),
-      blockNumber: blockHeight,
-      from: `0x${crypto.randomBytes(20).toString('hex')}`,
-      to: `0x${crypto.randomBytes(20).toString('hex')}`,
-      value: Math.floor(Math.random() * 1000000) + 1,
-      gas: Math.floor(Math.random() * 90000) + 21000,
-      gasPrice: 20000000000,
-      gasUsed: Math.floor(Math.random() * 90000) + 21000,
-      status: Math.random() > 0.02 ? 'success' : 'failed',
-      timestamp: Math.floor(block.timestamp / 1000),
-      nonce: Math.floor(Math.random() * 10),
-      input: '0x',
-      contractAddress: null
-    };
-    block.transactions.push(tx);
-  }
+  // No mock transactions - only real transactions
+  block.transactions = [];
   
   // Update blockchain state
   blockchainState.blocks.push(block);

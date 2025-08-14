@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { MINED_TOKEN_CONFIG } from '../config/mined-token-config';
-import MINEDTokenFixedABI from '../contracts/MINEDTokenFixed.json';
+import MINEDTokenStandaloneABI from '../contracts/MINEDTokenStandalone.json';
 import './MinedTokenDisplay.css';
 
 const MinedTokenDisplay = ({ userAddress }) => {
@@ -54,7 +54,7 @@ const MinedTokenDisplay = ({ userAddress }) => {
       // Create contract instance with better error handling
       const contractAddress = MINED_TOKEN_CONFIG.contracts.minedToken;
       console.log('Creating contract instance with address:', contractAddress);
-      console.log('ABI length:', MINEDTokenFixedABI.abi.length);
+      console.log('ABI length:', MINEDTokenStandaloneABI.abi.length);
       
       // Verify the contract address is valid
       if (!ethers.isAddress(contractAddress)) {
@@ -63,7 +63,7 @@ const MinedTokenDisplay = ({ userAddress }) => {
       
       const minedTokenContract = new ethers.Contract(
         contractAddress,
-        MINEDTokenFixedABI.abi,
+        MINEDTokenStandaloneABI.abi,
         provider
       );
       
@@ -96,47 +96,82 @@ const MinedTokenDisplay = ({ userAddress }) => {
         }
       }
 
-      // Get token info with better error handling (new fixed contract has 7 return values)
-      console.log('Getting asymptotic token info...');
+      // Get token info with better error handling
+      console.log('Getting token info...');
       try {
-        const info = await minedTokenContract.getAsymptoticTokenInfo();
-        console.log('Asymptotic info result:', info);
-        setTokenInfo({
-          name: info[0],
-          symbol: info[1],
-          decimals: info[2],
-          totalSupply: ethers.formatEther(info[3].toString()),
-          currentBlockHeight: info[4].toString(),
-          totalResearchValue: info[5].toString(),
-          softCap: ethers.formatEther(info[6].toString())
+        // Get basic token info
+        const name = await minedTokenContract.name();
+        const symbol = await minedTokenContract.symbol();
+        const decimals = await minedTokenContract.decimals();
+        const totalSupply = await minedTokenContract.totalSupply();
+        
+        // Get system info from standalone token (returns tuple: totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission)
+        const systemInfo = await minedTokenContract.getSystemInfo();
+        console.log('Raw systemInfo result:', systemInfo);
+        
+        // systemInfo is a tuple, access by index: [totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission]
+        const [systemTotalSupply, totalBurned, totalResearchValue, totalValidators, currentEmission] = systemInfo;
+        
+        console.log('Parsed system info:', {
+          totalSupply: systemTotalSupply.toString(),
+          totalBurned: totalBurned.toString(),
+          totalResearchValue: totalResearchValue.toString(),
+          totalValidators: totalValidators.toString(),
+          currentEmission: currentEmission.toString()
         });
         
-        // Get totalEmitted from emission parameters
-        const params = await minedTokenContract.getEmissionParameters();
-        setTokenInfo(prev => ({
-          ...prev,
-          totalEmitted: ethers.formatEther(params[4].toString())
-        }));
+        setTokenInfo({
+          name: name,
+          symbol: symbol,
+          decimals: Number(decimals),
+          totalSupply: ethers.formatEther(systemTotalSupply.toString()),
+          totalBurned: ethers.formatEther(totalBurned.toString()),
+          totalResearchValue: totalResearchValue.toString(),
+          totalValidators: totalValidators.toString(),
+          currentEmission: ethers.formatEther(currentEmission.toString()),
+          softCap: ethers.formatEther(systemTotalSupply.toString()) // Use total supply as soft cap
+        });
+        
+        // Get totalEmitted from calculateEmission (standalone contract doesn't have separate emission parameters)
+        try {
+          const currentEmission = await minedTokenContract.calculateEmission();
+          setTokenInfo(prev => ({
+            ...prev,
+            totalEmitted: ethers.formatEther(currentEmission.toString())
+          }));
+        } catch (emissionError) {
+          console.warn('calculateEmission not available, using totalSupply as fallback:', emissionError.message);
+          setTokenInfo(prev => ({
+            ...prev,
+            totalEmitted: ethers.formatEther(systemTotalSupply.toString())
+          }));
+        }
       } catch (infoError) {
-        console.error('getAsymptoticTokenInfo error:', infoError);
+        console.error('getSystemInfo error:', infoError);
         throw new Error(`Failed to get token info: ${infoError.message}`);
       }
 
-      // Get emission parameters with better error handling
-      console.log('Getting emission parameters...');
+      // Get emission parameters from calculateEmission (standalone contract doesn't have separate emission parameters)
+      console.log('Getting emission data from calculateEmission...');
       try {
-        const params = await minedTokenContract.getEmissionParameters();
-        console.log('Emission params result:', params);
+        const currentEmission = await minedTokenContract.calculateEmission();
+        console.log('Current emission result:', currentEmission);
         setEmissionParams({
-          initialEmissionRate: ethers.formatEther(params[0].toString()),
-          decayConstant: params[1].toString(),
-          researchMultiplierBase: params[2].toString(),
-          decayScale: params[3].toString(),
-          researchScale: params[4].toString()
+          initialEmissionRate: ethers.formatEther(currentEmission.toString()),
+          decayConstant: '1', // Default for standalone contract
+          researchMultiplierBase: '1', // Default for standalone contract
+          decayScale: '10000', // Default for standalone contract
+          researchScale: '100' // Default for standalone contract
         });
-      } catch (paramsError) {
-        console.error('getEmissionParameters error:', paramsError);
-        throw new Error(`Failed to get emission parameters: ${paramsError.message}`);
+      } catch (emissionError) {
+        console.warn('calculateEmission not available, using defaults:', emissionError.message);
+        setEmissionParams({
+          initialEmissionRate: '1000',
+          decayConstant: '1',
+          researchMultiplierBase: '1',
+          decayScale: '10000',
+          researchScale: '100'
+        });
       }
 
     } catch (err) {

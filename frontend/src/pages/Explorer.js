@@ -24,13 +24,13 @@ import {
   FaCoins,
   FaServer
 } from 'react-icons/fa';
-import web3Service from '../services/web3Service';
+import { web3Service } from '../services/web3Service';
 import { backendAPI } from '../utils/api';
 import './Explorer.css';
 
 const Explorer = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState('block');
+  const [searchType, setSearchType] = useState('transaction');
   const [web3Connected, setWeb3Connected] = useState(false);
   const [currentAccount, setCurrentAccount] = useState(null);
   const [currentNetwork, setCurrentNetwork] = useState(null);
@@ -53,12 +53,12 @@ const Explorer = () => {
     initializeWeb3();
   }, []);
 
-  // Fetch contract information from Web3Service
-  const { data: contractInfo, isLoading: contractLoading } = useQuery(
-    ['contractInfo'],
+  // Fetch token information from Web3Service
+  const { data: tokenInfo, isLoading: tokenLoading } = useQuery(
+    ['tokenInfo'],
     async () => {
       if (!web3Service.isWeb3Connected()) return null;
-      return await web3Service.getContractInfo();
+      return await web3Service.getTokenInfo();
     },
     { 
       refetchInterval: 30000,
@@ -173,12 +173,12 @@ const Explorer = () => {
 
   // Prepare data for charts
   const networkData = {
-    totalStaked: contractInfo?.totalStaked || 0,
-    maxDifficulty: contractInfo?.maxDifficulty || 0,
-    baseReward: contractInfo?.baseReward || 0,
-    paused: contractInfo?.paused || false,
-    owner: contractInfo?.owner || '0x0000...0000',
-    contractAddress: contractInfo?.address || '0x0000...0000'
+    totalSupply: tokenInfo?.totalSupply || 0,
+    tokenName: tokenInfo?.name || 'MINED',
+    tokenSymbol: tokenInfo?.symbol || 'MINED',
+    decimals: tokenInfo?.decimals || 18,
+    tokenAddress: tokenInfo?.address || '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3',
+    network: tokenInfo?.network || 'Sepolia Testnet'
   };
 
   const statsData = {
@@ -245,8 +245,8 @@ const Explorer = () => {
           transition={{ duration: 0.5 }}
         >
           <div className="header-content">
-            <h1>Blockchain Explorer</h1>
-            <p>Explore the ProductiveMiner blockchain and smart contract data</p>
+            <h1>ERC20 Token Explorer</h1>
+            <p>Explore MINED token transactions and data from genesis block</p>
           </div>
         </motion.div>
 
@@ -310,16 +310,16 @@ const Explorer = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <h3>Smart Contract Information</h3>
+          <h3>MINED Token Information</h3>
           <div className="info-grid">
             <div className="info-card">
               <div className="info-icon">
                 <FaShieldAlt />
               </div>
               <div className="info-content">
-                <h4>Contract Address</h4>
-                <p className="info-value">{formatAddress(networkData.contractAddress)}</p>
-                <p className="info-description">ProductiveMiner contract</p>
+                              <h4>Token Address</h4>
+              <p className="info-value">{formatAddress(networkData.tokenAddress)}</p>
+              <p className="info-description">MINED ERC20 token contract</p>
               </div>
             </div>
 
@@ -527,45 +527,49 @@ const Explorer = () => {
               </div>
             </div>
 
-            <div className="activity-item">
-              <div className="activity-icon">
-                <FaBrain />
+            {contractStats?.data?.totalDiscoveries > 0 && (
+              <div className="activity-item">
+                <div className="activity-icon">
+                  <FaBrain />
+                </div>
+                <div className="activity-content">
+                  <h4>Mathematical Discovery</h4>
+                  <p>Discovery submitted to blockchain</p>
+                  <span className="activity-time">Recent</span>
+                </div>
+                <div className="activity-value">
+                  <span className="value">+{contractStats.data.totalDiscoveries} Discoveries</span>
+                </div>
               </div>
-              <div className="activity-content">
-                <h4>Mathematical Discovery</h4>
-                <p>Yang-Mills field theory solution verified</p>
-                <span className="activity-time">8 minutes ago</span>
-              </div>
-              <div className="activity-value">
-                <span className="value">+800 MINED</span>
-              </div>
-            </div>
+            )}
 
-            <div className="activity-item">
-              <div className="activity-icon">
-                <FaCoins />
+            {contractStats?.data?.totalRewardsDistributed > 0 && (
+              <div className="activity-item">
+                <div className="activity-icon">
+                  <FaCoins />
+                </div>
+                <div className="activity-content">
+                  <h4>Rewards Distributed</h4>
+                  <p>Total rewards distributed to miners</p>
+                  <span className="activity-time">Total</span>
+                </div>
+                <div className="activity-value">
+                  <span className="value">+{formatNumber(contractStats.data.totalRewardsDistributed)} MINED</span>
+                </div>
               </div>
-              <div className="activity-content">
-                <h4>Rewards Distributed</h4>
-                <p>Block #12345 rewards distributed to miners</p>
-                <span className="activity-time">12 minutes ago</span>
-              </div>
-              <div className="activity-value">
-                <span className="value">+2,500 MINED</span>
-              </div>
-            </div>
+            )}
           </div>
         </motion.div>
 
-        {/* Blocks List */}
+        {/* Token Transactions */}
         <motion.div
-          className="blocks-list"
+          className="token-transactions"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.6 }}
         >
           <div className="section-header">
-            <h3>Recent Blocks</h3>
+            <h3>Recent MINED Token Transactions</h3>
             <div className="header-actions">
               <button className="refresh-btn" onClick={() => window.location.reload()}>
                 <FaCog /> Refresh
@@ -581,11 +585,13 @@ const Explorer = () => {
           ) : blocksData?.data?.blocks ? (
             <div className="blocks-grid">
               {blocksData.data.blocks.slice(0, 20).map((block, index) => (
-                <div key={block.blockNumber || index} className="block-card">
+                <div key={block.blockNumber || index} className={`block-card ${block.isDiscoveryBlock ? 'discovery-block' : block.hasMinedActivity ? 'mined-activity' : 'standard-block'}`}>
                   <div className="block-header">
                     <div className="block-number">
                       <FaCube />
                       <span>#{block.blockNumber || (blocksData.data.totalBlocks - index)}</span>
+                      {block.isDiscoveryBlock && <span className="discovery-badge">Discovery</span>}
+                      {block.hasMinedActivity && <span className="mined-badge">MINED</span>}
                     </div>
                     <div className="block-status">
                       <span className={`status ${block.status || 'confirmed'}`}>
@@ -597,28 +603,84 @@ const Explorer = () => {
                   <div className="block-details">
                     <div className="detail-row">
                       <span className="label">Hash:</span>
-                      <span className="value hash">{block.blockHash || `0x${Math.random().toString(16).slice(2, 66)}`}</span>
+                      <span className="value hash">{block.blockHash || 'No hash available'}</span>
                     </div>
                     
                     <div className="detail-row">
                       <span className="label">Miner:</span>
-                      <span className="value address">{block.miner || `0x${Math.random().toString(16).slice(2, 42)}`}</span>
+                      <span className="value address">{block.miner || 'No miner address'}</span>
                     </div>
                     
                     <div className="detail-row">
                       <span className="label">Work Type:</span>
-                      <span className="value work-type">{block.workType || 'Prime Pattern Discovery'}</span>
+                      <span className="value work-type">{block.workType || 'Sepolia Block'}</span>
                     </div>
                     
                     <div className="detail-row">
                       <span className="label">Difficulty:</span>
-                      <span className="value difficulty">{formatNumber(block.difficulty || Math.floor(Math.random() * 1000000) + 2500000)}</span>
+                      <span className="value difficulty">{formatNumber(block.difficulty || 0)}</span>
                     </div>
                     
+                    {block.reward > 0 && (
+                      <div className="detail-row">
+                        <span className="label">Reward:</span>
+                        <span className="value reward">{formatNumber(block.reward || 0)} MINED</span>
+                      </div>
+                    )}
+                    
                     <div className="detail-row">
-                      <span className="label">Reward:</span>
-                      <span className="value reward">{formatNumber(block.reward || Math.floor(Math.random() * 1000) + 100)} MINED</span>
+                      <span className="label">Transactions:</span>
+                      <span className="value transactions">{block.transactions_count || 0}</span>
                     </div>
+                    
+                    {block.gasUsed && (
+                      <div className="detail-row">
+                        <span className="label">Gas Used:</span>
+                        <span className="value gas">{formatNumber(block.gasUsed)} / {formatNumber(block.gasLimit)}</span>
+                      </div>
+                    )}
+                    
+                    {block.baseFeePerGas && (
+                      <div className="detail-row">
+                        <span className="label">Base Fee:</span>
+                        <span className="value gas-price">{formatNumber(block.baseFeePerGas)} Gwei</span>
+                      </div>
+                    )}
+                    
+                    {block.hasMinedActivity && (
+                      <div className="detail-row">
+                        <span className="label">MINED Activity:</span>
+                        <span className="value mined-activity">{block.minedTransactionsCount || 0} transactions</span>
+                      </div>
+                    )}
+                    
+                    {block.discoveryId && (
+                      <div className="detail-row">
+                        <span className="label">Discovery ID:</span>
+                        <span className="value discovery-id">{block.discoveryId}</span>
+                      </div>
+                    )}
+                    
+                    {block.complexity && (
+                      <div className="detail-row">
+                        <span className="label">Complexity:</span>
+                        <span className="value complexity">{formatNumber(block.complexity)}</span>
+                      </div>
+                    )}
+                    
+                    {block.significance && (
+                      <div className="detail-row">
+                        <span className="label">Significance:</span>
+                        <span className="value significance">{formatNumber(block.significance)}</span>
+                      </div>
+                    )}
+                    
+                    {block.researchValue && (
+                      <div className="detail-row">
+                        <span className="label">Research Value:</span>
+                        <span className="value research-value">{formatNumber(block.researchValue)}</span>
+                      </div>
+                    )}
                     
                     <div className="detail-row">
                       <span className="label">Timestamp:</span>
@@ -629,7 +691,23 @@ const Explorer = () => {
                   </div>
                   
                   <div className="block-actions">
-                    <button className="view-btn" onClick={() => alert(`Block #${block.blockNumber || (blocksData.data.totalBlocks - index)} details:\n\nHash: ${block.blockHash || 'N/A'}\nMiner: ${block.miner || 'N/A'}\nWork Type: ${block.workType || 'N/A'}\nDifficulty: ${formatNumber(block.difficulty || 0)}\nReward: ${formatNumber(block.reward || 0)} MINED`)}>
+                    <button className="view-btn" onClick={() => {
+                      const details = `Block #${block.blockNumber || (blocksData.data.totalBlocks - index)} details:\n\n` +
+                        `Hash: ${block.blockHash || 'N/A'}\n` +
+                        `Miner: ${block.miner || 'N/A'}\n` +
+                        `Work Type: ${block.workType || 'N/A'}\n` +
+                        `Difficulty: ${formatNumber(block.difficulty || 0)}\n` +
+                        `Transactions: ${block.transactions_count || 0}\n` +
+                        `Gas Used: ${block.gasUsed ? formatNumber(block.gasUsed) : 'N/A'}\n` +
+                        `Base Fee: ${block.baseFeePerGas ? formatNumber(block.baseFeePerGas) + ' Gwei' : 'N/A'}\n` +
+                        `MINED Activity: ${block.hasMinedActivity ? 'Yes' : 'No'}\n` +
+                        `Discovery ID: ${block.discoveryId || 'N/A'}\n` +
+                        `Complexity: ${block.complexity ? formatNumber(block.complexity) : 'N/A'}\n` +
+                        `Significance: ${block.significance ? formatNumber(block.significance) : 'N/A'}\n` +
+                        `Research Value: ${block.researchValue ? formatNumber(block.researchValue) : 'N/A'}\n` +
+                        `Reward: ${block.reward ? formatNumber(block.reward) + ' MINED' : 'N/A'}`;
+                      alert(details);
+                    }}>
                       <FaSearch /> View Details
                     </button>
                   </div>

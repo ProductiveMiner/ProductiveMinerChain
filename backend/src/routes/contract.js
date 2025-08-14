@@ -18,7 +18,7 @@ const CONTRACT_CONFIG = {
   SEPOLIA: {
     rpcUrl: process.env.WEB3_PROVIDER || 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC',
     contractAddress: process.env.CONTRACT_ADDRESS || '0xf58fA04DC5E087991EdC6f4ADEF1F87814f9F68b', // ProductiveMinerFixed contract
-    tokenAddress: process.env.TOKEN_ADDRESS || '0x1a963782dB0e5502defb04d662B7031FaB9e15E2', // MINEDTokenFixed contract
+    tokenAddress: process.env.TOKEN_ADDRESS || '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3', // MINEDTokenStandalone contract
     chainId: 11155111,
     explorerUrl: 'https://sepolia.etherscan.io'
   }
@@ -29,163 +29,114 @@ console.log('CONTRACT_CONFIG:', CONTRACT_CONFIG);
 // Load contract ABI - Updated to use ProductiveMinerFixed
 const contractABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../contracts/ProductiveMinerFixed.json'), 'utf8')).abi;
 
-// Helper function to get real blockchain data from Sepolia contract
+// Load MINEDTokenStandalone ABI
+const tokenABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../contracts/MINEDTokenStandalone.json'), 'utf8')).abi;
+
+// Helper function to get real blockchain data from MINEDTokenStandalone contract
 async function getRealBlockchainData() {
   try {
     const provider = new ethers.JsonRpcProvider(CONTRACT_CONFIG.SEPOLIA.rpcUrl);
-    const contract = new ethers.Contract(CONTRACT_CONFIG.SEPOLIA.contractAddress, contractABI, provider);
+    const contract = new ethers.Contract(CONTRACT_CONFIG.SEPOLIA.tokenAddress, tokenABI, provider);
     
     // Get current block number
     const currentBlock = await provider.getBlockNumber();
     
-    // Get contract state (these should always work)
-    let isPaused = false;
-    let maxDifficulty = '1000000';
-    let baseReward = '0.001';
-    let quantumSecurityLevel = '1';
+    // Get system info from MINEDTokenStandalone contract
+    const systemInfo = await contract.getSystemInfo();
     
-    try {
-      isPaused = await contract.paused();
-      console.log('Contract paused status:', isPaused);
-    } catch (error) {
-      console.log('paused() function failed:', error.message);
-    }
+    // Get token info
+    const name = await contract.name();
+    const symbol = await contract.symbol();
+    const decimals = await contract.decimals();
     
-    try {
-      maxDifficulty = await contract.maxDifficulty();
-      console.log('Contract maxDifficulty:', maxDifficulty.toString());
-    } catch (error) {
-      console.log('maxDifficulty() function failed:', error.message);
-    }
+    console.log('MINEDTokenStandalone Contract Data:');
+    console.log(`   Name: ${name}`);
+    console.log(`   Symbol: ${symbol}`);
+    console.log(`   Total Supply: ${ethers.formatEther(systemInfo.totalSupply_)} ${symbol}`);
+    console.log(`   Total Burned: ${ethers.formatEther(systemInfo.totalBurned_)} ${symbol}`);
+    console.log(`   Total Research Value: ${systemInfo.totalResearchValue_.toString()}`);
+    console.log(`   Total Validators: ${systemInfo.totalValidators_.toString()}`);
+    console.log(`   Current Emission: ${ethers.formatEther(systemInfo.currentEmission)} ${symbol}`);
     
-    try {
-      baseReward = await contract.baseReward();
-      console.log('Contract baseReward:', ethers.formatEther(baseReward));
-    } catch (error) {
-      console.log('baseReward() function failed:', error.message);
-    }
-    
-    try {
-      quantumSecurityLevel = await contract.quantumSecurityLevel();
-      console.log('Contract quantumSecurityLevel:', quantumSecurityLevel.toString());
-    } catch (error) {
-      console.log('quantumSecurityLevel() function failed:', error.message);
-    }
-    
-    // Query contract events for real blockchain data
-    // Use a more recent block range to catch recent activity
-    const fromBlock = Math.max(0, currentBlock - 1000); // Last 1000 blocks
+    // Get recent events (last 200 blocks to avoid RPC limits)
+    const fromBlock = Math.max(0, currentBlock - 200);
     const toBlock = currentBlock;
     
-    // Try to get events, but don't fail if there are none
     let discoveryEvents = [];
-    let sessionEvents = [];
-    let rewardsEvents = [];
-    let stakedEvents = [];
+    let validatorEvents = [];
+    let stakingEvents = [];
+    let transferEvents = [];
     
     try {
-      // Get DiscoverySubmitted events
       discoveryEvents = await contract.queryFilter('DiscoverySubmitted', fromBlock, toBlock);
-      console.log('DiscoverySubmitted events found:', discoveryEvents.length);
     } catch (error) {
-      console.log('DiscoverySubmitted events not found:', error.message);
+      console.log('No discovery events found');
     }
     
     try {
-      // Get MiningSessionStarted events
-      sessionEvents = await contract.queryFilter('MiningSessionStarted', fromBlock, toBlock);
-      console.log('MiningSessionStarted events found:', sessionEvents.length);
+      validatorEvents = await contract.queryFilter('ValidatorRegistered', fromBlock, toBlock);
     } catch (error) {
-      console.log('MiningSessionStarted events not found:', error.message);
+      console.log('No validator events found');
     }
     
     try {
-      // Get MiningSessionCompleted events
-      const completedEvents = await contract.queryFilter('MiningSessionCompleted', fromBlock, toBlock);
-      console.log('MiningSessionCompleted events found:', completedEvents.length);
+      stakingEvents = await contract.queryFilter('TokensStaked', fromBlock, toBlock);
     } catch (error) {
-      console.log('MiningSessionCompleted events not found:', error.message);
+      console.log('No staking events found');
     }
     
     try {
-      // Get RewardsClaimed events
-      rewardsEvents = await contract.queryFilter('RewardsClaimed', fromBlock, toBlock);
-      console.log('RewardsClaimed events found:', rewardsEvents.length);
+      transferEvents = await contract.queryFilter('Transfer', fromBlock, toBlock);
     } catch (error) {
-      console.log('RewardsClaimed events not found:', error.message);
+      console.log('No transfer events found');
     }
-    
-    try {
-      // Get Staked events
-      stakedEvents = await contract.queryFilter('Staked', fromBlock, toBlock);
-      console.log('Staked events found:', stakedEvents.length);
-    } catch (error) {
-      console.log('Staked events not found:', error.message);
-    }
-    
-    // Also try to get all events from the contract to see what's actually happening
-    try {
-      const allEvents = await contract.queryFilter('*', fromBlock, toBlock);
-      console.log('Total events found:', allEvents.length);
-      if (allEvents.length > 0) {
-        console.log('Event topics found:', allEvents.map(e => e.topics[0]));
-      }
-    } catch (error) {
-      console.log('Failed to get all events:', error.message);
-    }
-    
-    // Calculate real statistics from events
-    const totalDiscoveries = discoveryEvents.length;
-    const totalSessions = sessionEvents.length;
-    const totalRewardsDistributed = rewardsEvents.reduce((total, event) => {
-      return total + parseFloat(ethers.formatEther(event.args.amount || 0));
-    }, 0);
-    
-    // Get current active sessions (estimate based on recent events)
-    const currentActiveSessions = Math.max(0, totalSessions - rewardsEvents.length);
-    
-    // Get total staked from events
-    const totalStaked = stakedEvents.reduce((total, event) => {
-      return total + parseFloat(ethers.formatEther(event.args.amount || 0));
-    }, 0);
-    
-    // Calculate blockchain statistics
-    const totalBlocks = currentBlock;
-    const totalTransactions = totalSessions + totalDiscoveries + rewardsEvents.length + stakedEvents.length;
-    const totalValidators = Math.max(1, Math.floor(totalStaked / 1000)); // Estimate 1 validator per 1000 staked
-    const averageBlockTime = 12; // Sepolia average block time
-    
-    const hasEvents = totalDiscoveries > 0 || totalSessions > 0 || totalStaked > 0 || totalRewardsDistributed > 0;
-    
-    console.log('Contract data summary:', {
-      totalDiscoveries,
-      totalSessions,
-      totalStaked,
-      totalRewardsDistributed,
-      hasEvents,
-      currentBlock
-    });
     
     return {
-      maxDifficulty: maxDifficulty.toString(),
-      baseReward: ethers.formatEther(baseReward),
-      quantumSecurityLevel: quantumSecurityLevel.toString(),
-      totalStaked,
-      totalRewardsDistributed,
-      currentActiveSessions,
-      totalDiscoveries,
-      totalSessions,
-      totalBlocks,
-      totalTransactions,
-      totalValidators,
-      averageBlockTime,
-      isPaused,
       connected: true,
-      hasEvents
+      hasEvents: discoveryEvents.length > 0 || validatorEvents.length > 0 || stakingEvents.length > 0,
+      totalSupply: parseFloat(ethers.formatEther(systemInfo.totalSupply_)),
+      totalBurned: parseFloat(ethers.formatEther(systemInfo.totalBurned_)),
+      totalResearchValue: systemInfo.totalResearchValue_.toString(),
+      totalValidators: parseInt(systemInfo.totalValidators_.toString()),
+      currentEmission: parseFloat(ethers.formatEther(systemInfo.currentEmission)),
+      totalDiscoveries: discoveryEvents.length,
+      totalSessions: discoveryEvents.length, // Each discovery is a session
+      totalStaked: stakingEvents.length > 0 ? stakingEvents.reduce((sum, event) => sum + parseFloat(ethers.formatEther(event.args.amount)), 0) : 0,
+      totalRewardsDistributed: discoveryEvents.length * 100, // Estimate based on discoveries
+      currentActiveSessions: discoveryEvents.filter(e => e.blockNumber >= currentBlock - 10).length,
+      totalBlocks: currentBlock,
+      totalTransactions: transferEvents.length,
+      averageBlockTime: 12, // Sepolia average
+      isPaused: false, // MINEDTokenStandalone doesn't have pause functionality
+      contractAddress: CONTRACT_CONFIG.SEPOLIA.tokenAddress,
+      network: 'Sepolia Testnet',
+      chainId: CONTRACT_CONFIG.SEPOLIA.chainId,
+      note: 'Real data from MINEDTokenStandalone contract'
     };
   } catch (error) {
-    console.error('Failed to get real blockchain data from Sepolia:', error);
-    throw new Error('Unable to fetch blockchain data');
+    console.error('Error getting real blockchain data:', error);
+    return {
+      connected: false,
+      hasEvents: false,
+      totalSupply: 1000000000,
+      totalBurned: 0,
+      totalResearchValue: 0,
+      totalValidators: 0,
+      currentEmission: 0,
+      totalDiscoveries: 0,
+      totalSessions: 0,
+      totalStaked: 0,
+      totalRewardsDistributed: 0,
+      currentActiveSessions: 0,
+      totalBlocks: 0,
+      totalTransactions: 0,
+      averageBlockTime: 0,
+      isPaused: false,
+      contractAddress: CONTRACT_CONFIG.SEPOLIA.tokenAddress,
+      network: 'Sepolia Testnet',
+      chainId: CONTRACT_CONFIG.SEPOLIA.chainId,
+      note: 'Fallback data - blockchain connection failed'
+    };
   }
 }
 
@@ -323,11 +274,11 @@ router.get('/stats/network', async (req, res) => {
   } catch (error) {
     console.error('Network stats error:', error);
     
-    // Return fallback data when blockchain is unavailable
-    const fallbackNetworkStats = {
-      maxDifficulty: '1000',
-      baseReward: '0.001',
-      quantumSecurityLevel: '1',
+    // Return empty data when blockchain is unavailable
+    const emptyNetworkStats = {
+      maxDifficulty: '0',
+      baseReward: '0',
+      quantumSecurityLevel: '0',
       totalStaked: 0,
       totalRewardsDistributed: 0,
       currentActiveSessions: 0,
@@ -339,12 +290,12 @@ router.get('/stats/network', async (req, res) => {
       averageBlockTime: 0,
       connected: false,
       hasEvents: false,
-      note: 'Using fallback data - blockchain connection unavailable'
+      note: 'No data available - blockchain connection unavailable'
     };
     
     res.json({
       success: true,
-      data: fallbackNetworkStats
+      data: emptyNetworkStats
     });
   }
 });

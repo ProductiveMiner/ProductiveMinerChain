@@ -85,36 +85,8 @@ router.get('/info', asyncHandler(async (req, res) => {
     minStakeAmount: realStakingData.minStakeAmount,
     maxStakeAmount: realStakingData.maxStakeAmount,
     totalBlocks: realStakingData.totalBlocks,
-    validators: [
-      {
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        name: 'Validator Alpha',
-        stake: 1000000,
-        commission: 5.0,
-        uptime: 99.8,
-        rewards: 45000
-      },
-      {
-        address: '0x2345678901bcdef2345678901bcdef2345678901',
-        name: 'Validator Beta',
-        stake: 850000,
-        commission: 4.5,
-        uptime: 99.5,
-        rewards: 38000
-      }
-    ],
-    userStakingHistory: [
-      {
-        amount: 25000,
-        timestamp: new Date(Date.now() - 86400000).toISOString(),
-        type: 'stake'
-      },
-      {
-        amount: 25000,
-        timestamp: new Date(Date.now() - 172800000).toISOString(),
-        type: 'stake'
-      }
-    ]
+    validators: [], // Will be populated from real contract data
+    userStakingHistory: [] // Will be populated from real contract data
   };
 
   res.json(stakingInfo);

@@ -1,103 +1,60 @@
-const { ethers } = require("hardhat");
+const fs = require('fs');
+const path = require('path');
 
-async function main() {
-  console.log("🔍 Starting ProductiveMiner contract verification process...");
+// Contract details
+const CONTRACT_ADDRESS = '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3';
+const CONSTRUCTOR_ARGS = '0000000000000000000000009beb6d047ab5126bf20d9bd0940e022628276ab4';
 
-  // Check if we have the required environment variables
-  if (!process.env.ETHERSCAN_API_KEY) {
-    console.error("❌ ETHERSCAN_API_KEY not found in environment variables");
-    console.log("📝 Please add your Etherscan API key to .env file");
-    process.exit(1);
-  }
+// Read the flattened contract
+const contractPath = path.join(__dirname, 'MINEDTokenStandalone_flattened_runs200_clean.sol');
+const contractSource = fs.readFileSync(contractPath, 'utf8');
 
-  if (!process.env.PRIVATE_KEY) {
-    console.error("❌ PRIVATE_KEY not found in environment variables");
-    console.log("📝 Please add your deployment private key to .env file");
-    process.exit(1);
-  }
-
-  // Get the contract factory
-  const ProductiveMiner = await ethers.getContractFactory("ProductiveMiner");
-  
-  // Deploy the contract to testnet
-  console.log("📦 Deploying ProductiveMiner contract to Sepolia testnet...");
-  
-  const tokenAddress = ethers.ZeroAddress; // No token integration initially
-  const contract = await ProductiveMiner.deploy(tokenAddress);
-  
-  await contract.waitForDeployment();
-  const contractAddress = await contract.getAddress();
-  
-  console.log("✅ ProductiveMiner deployed to:", contractAddress);
-  console.log("📝 Deployment Transaction Hash:", contract.deploymentTransaction()?.hash);
-  
-  // Wait a few blocks for the deployment to be confirmed
-  console.log("⏳ Waiting for deployment confirmation...");
-  await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
-  
-  // Verify the contract on Etherscan
-  console.log("🔍 Verifying contract on Etherscan...");
-  
-  try {
-    await hre.run("verify:verify", {
-      address: contractAddress,
-      constructorArguments: [tokenAddress],
-      network: "testnet"
-    });
-    
-    console.log("✅ Contract verified successfully on Etherscan!");
-    console.log("🌐 View contract at: https://sepolia.etherscan.io/address/" + contractAddress);
-    
-  } catch (error) {
-    console.error("❌ Verification failed:", error.message);
-    
-    if (error.message.includes("Already Verified")) {
-      console.log("ℹ️  Contract is already verified on Etherscan");
-      console.log("🌐 View contract at: https://sepolia.etherscan.io/address/" + contractAddress);
-    } else {
-      console.log("📝 Manual verification may be required");
-      console.log("🔧 Please verify manually at: https://sepolia.etherscan.io/verifyContract");
-    }
-  }
-  
-  // Log contract details
-  console.log("\n📊 Contract Details:");
-  console.log("   - Contract Address:", contractAddress);
-  console.log("   - Owner:", await contract.owner());
-  console.log("   - Max Difficulty:", await contract.maxDifficulty());
-  console.log("   - Base Reward:", await contract.baseReward());
-  console.log("   - Quantum Security Level:", await contract.quantumSecurityLevel());
-  console.log("   - Min Stake Amount:", await contract.minStakeAmount());
-  console.log("   - Staking APY:", await contract.stakingAPY());
-  console.log("   - Max Concurrent Sessions:", await contract.maxConcurrentSessions());
-  console.log("   - Token Integration Enabled:", await contract.tokenIntegrationEnabled());
-  
-  // Save deployment info
-  const deploymentInfo = {
-    contractAddress: contractAddress,
-    networkId: 11155111, // Sepolia
-    deploymentTx: contract.deploymentTransaction()?.hash,
-    timestamp: new Date().toISOString(),
-    verified: true
-  };
-  
-  console.log("\n💾 Deployment info saved to deployment-info-testnet.json");
-  
-  return {
-    contractAddress,
-    contract,
-    network: 11155111
-  };
-}
-
-// Handle deployment errors
-main()
-  .then((result) => {
-    console.log("\n✅ Deployment and verification completed successfully");
-    console.log("🎉 Your contract is now live and verified on Sepolia testnet!");
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error("❌ Deployment/verification failed:", error);
-    process.exit(1);
-  });
+console.log('🔍 ETHERSCAN VERIFICATION HELPER');
+console.log('================================');
+console.log('');
+console.log('📋 CONTRACT DETAILS:');
+console.log(`Contract Address: ${CONTRACT_ADDRESS}`);
+console.log(`Constructor Args: ${CONSTRUCTOR_ARGS}`);
+console.log(`Source File: ${contractPath}`);
+console.log('');
+console.log('⚙️  COMPILER SETTINGS:');
+console.log('Compiler Type: Solidity (Single file)');
+console.log('Compiler Version: v0.8.30+commit.a1b79de6');
+console.log('License: MIT License (MIT)');
+console.log('Optimization: Yes');
+console.log('Runs: 200');
+console.log('Via IR: No');
+console.log('');
+console.log('📝 CONTRACT INFORMATION:');
+console.log('Contract Name: OptimizedMINEDToken');
+console.log('');
+console.log('🔗 ETHERSCAN URL:');
+console.log(`https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`);
+console.log('');
+console.log('📄 SOURCE CODE LENGTH:');
+console.log(`Characters: ${contractSource.length}`);
+console.log(`Lines: ${contractSource.split('\n').length}`);
+console.log('');
+console.log('✅ VERIFICATION STEPS:');
+console.log('1. Go to the Etherscan URL above');
+console.log('2. Click "Contract" tab → "Verify and Publish"');
+console.log('3. Select "Solidity (Single file)"');
+console.log('4. Enter the compiler settings above');
+console.log('5. Enter contract name: OptimizedMINEDToken');
+console.log('6. Enter constructor args: ' + CONSTRUCTOR_ARGS);
+console.log('7. Copy the entire content of MINEDTokenStandalone_flattened_runs200_clean.sol');
+console.log('8. Paste into "Contract Source Code" field');
+console.log('9. Click "Verify and Publish"');
+console.log('');
+console.log('🎯 SUCCESS INDICATORS:');
+console.log('- Source code visible on Etherscan');
+console.log('- "Write Contract" tab shows functions');
+console.log('- No bytecode mismatch errors');
+console.log('- No parser errors');
+console.log('');
+console.log('📁 FILES READY:');
+console.log('✅ MINEDTokenStandalone_flattened_runs200_clean.sol');
+console.log('✅ hardhat-verify.config.js');
+console.log('✅ ETHERSCAN_VERIFICATION_GUIDE.md');
+console.log('');
+console.log('🚀 READY FOR VERIFICATION!');

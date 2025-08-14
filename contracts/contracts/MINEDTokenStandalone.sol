@@ -475,5 +475,3 @@ contract OptimizedMINEDToken is ERC20, Ownable2Step {
         return (info.difficultyMultiplier, info.baseReward, info.isActive);
     }
 }
-
-
