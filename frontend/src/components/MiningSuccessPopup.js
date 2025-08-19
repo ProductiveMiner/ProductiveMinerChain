@@ -15,7 +15,13 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
     timestamp,
     hashrate,
     tokenRewards,
-    tokenBalance
+    tokenBalance,
+    discoveryData,
+    workType,
+    complexity,
+    significance,
+    researchValue,
+    transactionHash
   } = miningData || {};
 
   const handleShare = () => {
@@ -114,6 +120,42 @@ const MiningSuccessPopup = ({ isVisible, onClose, miningData }) => {
               </span>
             </div>
           </motion.div>
+
+          {/* Discovery Details */}
+          {(workType || complexity || significance || researchValue) && (
+            <motion.div
+              className="discovery-details"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
+            >
+              <h3 className="discovery-title">🔬 Discovery Details</h3>
+              {workType && (
+                <div className="detail-row">
+                  <span className="detail-label">Work Type:</span>
+                  <span className="detail-value">{workType}</span>
+                </div>
+              )}
+              {complexity && (
+                <div className="detail-row">
+                  <span className="detail-label">Complexity:</span>
+                  <span className="detail-value">{Number(complexity).toFixed(2)}</span>
+                </div>
+              )}
+              {significance && (
+                <div className="detail-row">
+                  <span className="detail-label">Significance:</span>
+                  <span className="detail-value">{Number(significance).toFixed(2)}</span>
+                </div>
+              )}
+              {researchValue && (
+                <div className="detail-row">
+                  <span className="detail-label">Research Value:</span>
+                  <span className="detail-value">{Number(researchValue).toFixed(2)} MINED</span>
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {/* MINED Token Reward section */}
           <motion.div

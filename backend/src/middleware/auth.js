@@ -1,6 +1,11 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../database/connection');
 const winston = require('winston');
+const path = require('path');
+
+// Use relative path for logs in development, absolute path in production
+const logDir = process.env.NODE_ENV === 'production' ? '/app/logs' : './logs';
+const authLogPath = path.join(logDir, 'auth.log');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -9,7 +14,7 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ filename: '/app/logs/auth.log' })
+    new winston.transports.File({ filename: authLogPath })
   ]
 });
 

@@ -1,0 +1,34 @@
+{
+  "contractName": "MINEDTokenFixed",
+  "contractAddress": "0xc08C1B306F8C79ce29b2109a97c40E1e5bcb80D5",
+  "deployer": "0x6fF6dD4E5974B92d64C4068d83095AC1d7c1EC18",
+  "network": "sepolia",
+  "totalSupply": "1000000000.0",
+  "name": "MINED Token Fixed",
+  "symbol": "MINED",
+  "pools": {
+    "miningRewards": "100000000.0",
+    "staking": "200000000.0",
+    "treasury": "100000000.0",
+    "researchAccess": "100000000.0",
+    "governance": "50000000.0",
+    "transactionFees": "50000000.0"
+  },
+  "features": {
+    "workTypes": 25,
+    "validators": 5,
+    "networkHealth": 95,
+    "systemCompatible": true
+  },
+  "deploymentTimestamp": "2025-08-17T17:36:08.712Z",
+  "tokenomics": {
+    "totalSupply": "1,000,000,000 MINED",
+    "circulatingSupply": "500,000,000 MINED (50%)",
+    "stakingPool": "200,000,000 MINED (20%)",
+    "miningRewards": "100,000,000 MINED (10%)",
+    "treasury": "100,000,000 MINED (10%)",
+    "researchAccess": "100,000,000 MINED (10%)",
+    "governance": "50,000,000 MINED (5%)",
+    "transactionFees": "50,000,000 MINED (5%)"
+  }
+}

@@ -1,30 +1,30 @@
 {
   "name": "productiveminer-frontend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "dependencies": {
     "axios": "^1.4.0",
-    "ethers": "^6.15.0",
-    "framer-motion": "^10.16.4",
+    "ethers": "^6.7.0",
+    "framer-motion": "^10.12.16",
     "react": "^18.2.0",
-    "react-countup": "^6.4.2",
+    "react-countup": "^6.5.3",
     "react-dom": "^18.2.0",
+    "react-helmet-async": "^2.0.5",
     "react-icons": "^4.10.1",
-    "react-intersection-observer": "^9.5.2",
+    "react-intersection-observer": "^9.16.0",
     "react-query": "^3.39.3",
     "react-router-dom": "^6.11.2",
     "react-scripts": "5.0.1",
-    "recharts": "^2.8.0",
-    "socket.io-client": "^4.7.2",
-    "web3": "^4.16.0"
+    "recharts": "^2.7.2",
+    "web3": "^1.10.0"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "GENERATE_SOURCEMAP=false react-scripts build",
-    "build-cache-bust": "GENERATE_SOURCEMAP=false REACT_APP_BUILD_TIME=$(date +%s) react-scripts build",
-    "build-force-new": "GENERATE_SOURCEMAP=false REACT_APP_BUILD_TIME=$(date +%s) REACT_APP_VERSION=$(date +%Y%m%d%H%M%S) react-scripts build",
+    "build": "react-scripts build",
+    "build-force-new": "GENERATE_SOURCEMAP=false CI=false react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "deploy-s3": "./deploy-s3-optimized.sh"
   },
   "browserslist": {
     "production": [
@@ -37,8 +37,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "sharp": "^0.34.3"
   }
 }

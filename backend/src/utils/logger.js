@@ -1,4 +1,10 @@
 const winston = require('winston');
+const path = require('path');
+
+// Use relative path for logs in development, absolute path in production
+const logDir = process.env.NODE_ENV === 'production' ? '/app/logs' : './logs';
+const errorLogPath = path.join(logDir, 'error.log');
+const combinedLogPath = path.join(logDir, 'combined.log');
 
 // Configure logging
 const logger = winston.createLogger({
@@ -10,8 +16,8 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'productiveminer-backend' },
   transports: [
-    new winston.transports.File({ filename: '/app/logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: '/app/logs/combined.log' })
+    new winston.transports.File({ filename: errorLogPath, level: 'error' }),
+    new winston.transports.File({ filename: combinedLogPath })
   ]
 });
 

@@ -1,12 +1,12 @@
 import axios from 'axios';
 
-// API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.productiveminer.org';
+// API Configuration - Using relative URLs for CloudFront proxy
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 // Create axios instance with proper configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased from 10000 to 30000ms
   headers: {
     'Content-Type': 'application/json',
   },
@@ -51,6 +51,11 @@ export const backendAPI = {
     return apiCall(apiClient, '/api/stats/dashboard/user');
   },
 
+  // User stats
+  getUserStats: async (address) => {
+    return apiCall(apiClient, `/api/stats/user/${address}`);
+  },
+
   // Token data - Updated to use new endpoint
   getTokenData: async () => {
     return apiCall(apiClient, '/api/token/data');
@@ -87,6 +92,11 @@ export const backendAPI = {
     return apiCall(apiClient, '/api/contract/stats/network');
   },
 
+  // Network stats - Added missing function
+  getNetworkStats: async () => {
+    return apiCall(apiClient, '/api/contract/stats/network');
+  },
+
   // Engine data - Updated to use new endpoints
   getEngineStats: async () => {
     return apiCall(apiClient, '/api/engines/stats');
@@ -117,6 +127,27 @@ export const backendAPI = {
   // Staking data
   getStakingInfo: async () => {
     return apiCall(apiClient, '/api/staking/info');
+  },
+
+  // Staking actions
+  stakeTokens: async (stakeData) => {
+    return apiCall(apiClient, '/api/staking/stake', {
+      method: 'POST',
+      data: stakeData
+    });
+  },
+
+  unstakeTokens: async (unstakeData) => {
+    return apiCall(apiClient, '/api/staking/unstake', {
+      method: 'POST',
+      data: unstakeData
+    });
+  },
+
+  claimStakingRewards: async () => {
+    return apiCall(apiClient, '/api/staking/claim', {
+      method: 'POST'
+    });
   },
 
   // Explorer data

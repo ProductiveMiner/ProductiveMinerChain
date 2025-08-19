@@ -2,9 +2,9 @@
 // ERC20 Token Only - No Smart Contract Integration
 
 const API_CONFIG = {
-  // Backend API endpoints - Using production domain
+  // Backend API endpoints - Direct connection to ECS
   BACKEND_API: {
-    BASE_URL: process.env.REACT_APP_API_URL || 'https://api.productiveminer.org',
+    BASE_URL: process.env.REACT_APP_API_URL || '',
     ENDPOINTS: {
       HEALTH: '/api/health',
       USERS: '/api/users',
@@ -18,38 +18,34 @@ const API_CONFIG = {
       RESEARCH: '/api/research',
       EXPLORER: '/api/explorer',
       STATS: '/api/stats',
-      CONTRACT: '/api/contract'
+      CONTRACT: '/api/contract',
+      TOKEN: '/api/token/data'
     }
   },
   
-  // Mathematical Engine endpoints - Using production domain
+  // Mathematical Engine endpoints - Direct connection to ECS
   MATHEMATICAL_ENGINE: {
-    BASE_URL: process.env.REACT_APP_MATH_ENGINE_URL || 'https://api.productiveminer.org',
+    BASE_URL: process.env.REACT_APP_ENGINE_URL || 'https://math-engine.productiveminer.org',
     ENDPOINTS: {
       HEALTH: '/health',
-      ROOT: '/',
-      ENGINES: '/engines/stats',
-      DISTRIBUTION: '/engines/distribution',
-      MINING_STATUS: '/mining/status',
-      DISCOVERIES: '/discoveries',
-      COMPUTE: '/compute',
-      // Mathematical computation endpoints
-      RIEMANN_ZEROS: '/compute',
-      GOLDBACH: '/compute',
-      PRIME_PATTERNS: '/compute',
-      YANG_MILLS: '/compute',
-      NAVIER_STOKES: '/compute',
-      BIRCH_SWINNERTON: '/compute',
-      ECC: '/compute',
-      LATTICE: '/compute',
-      POINCARE: '/compute'
+      COMPUTE: '/api/v1/compute',
+      // Mathematical computation endpoints - all use the same compute endpoint
+      RIEMANN_ZEROS: '/api/v1/compute',
+      GOLDBACH: '/api/v1/compute',
+      PRIME_PATTERNS: '/api/v1/compute',
+      YANG_MILLS: '/api/v1/compute',
+      NAVIER_STOKES: '/api/v1/compute',
+      BIRCH_SWINNERTON: '/api/v1/compute',
+      ECC: '/api/v1/compute',
+      LATTICE: '/api/v1/compute',
+      POINCARE: '/api/v1/compute'
     }
   },
   
-  // WebSocket configuration - Using proper domain
+  // WebSocket configuration - Direct connection to ECS
   WEBSOCKET: {
     URL: (typeof window !== 'undefined')
-      ? `wss://api.productiveminer.org/ws`
+      ? (process.env.REACT_APP_WS_URL || 'wss://api.productiveminer.org/ws')
       : (process.env.REACT_APP_WS_URL || 'wss://api.productiveminer.org/ws'),
     RECONNECT_INTERVAL: 5000,
     MAX_RECONNECT_ATTEMPTS: 5
@@ -67,7 +63,7 @@ const API_CONFIG = {
     NETWORK_ID: 11155111, // Sepolia Testnet
     CHAIN_ID: 11155111,
     RPC_URL: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Live Alchemy RPC URL
-    TOKEN_ADDRESS: '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3', // MINEDTokenStandalone ERC20 contract
+    TOKEN_ADDRESS: '0x7877EFAb4aD3610792a135f6f8A241962fD2ab76', // MINEDToken contract
     EXPLORER_URL: 'https://sepolia.etherscan.io'
   }
 };

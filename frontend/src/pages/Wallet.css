@@ -589,6 +589,33 @@
   justify-content: flex-end;
 }
 
+/* Staking Modal Info */
+.stake-info {
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.info-text {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #ffd700;
+}
+
+.info-text strong {
+  color: #ffffff;
+}
+
+.form-help {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #b0b0b0;
+  font-style: italic;
+}
+
 /* Error Banner */
 .error-banner {
   position: fixed;

@@ -68,14 +68,11 @@ const Wallet = () => {
       
       console.log('Refreshing wallet data...');
       
-      // Refresh MINED token balance
-      const newMinedBalance = await minedTokenService.refreshBalance(web3Service.getCurrentAccount());
-      setMinedBalance(newMinedBalance);
-      console.log('Updated MINED token balance:', newMinedBalance);
-      
-      // Refresh token balance
+      // Get balance directly from blockchain instead of API
       const tokenBalance = await web3Service.getTokenBalance();
-      setMinedBalance(tokenBalance);
+      const balanceInEther = web3Service.web3.utils.fromWei(tokenBalance, 'ether');
+      setMinedBalance(balanceInEther);
+      console.log('Updated MINED token balance from blockchain:', balanceInEther);
       
       // Refresh token information
       const info = await web3Service.getTokenInfo();
@@ -86,7 +83,7 @@ const Wallet = () => {
       setStakingInfo({
         staked: staking?.stakedAmount || 0,
         rewards: staking?.rewards || 0,
-        apy: 0,
+        apy: staking?.apy || 0,
         validators: []
       });
       
@@ -126,22 +123,27 @@ const Wallet = () => {
               validators: []
             });
             
-            // Get MINED token balance
-            const minedBal = await minedTokenService.getBalance(web3Service.getCurrentAccount());
-            setMinedBalance(minedBal);
-            console.log('Initial MINED token balance:', minedBal);
+            // Get MINED token balance directly from blockchain
+            const tokenBalance = await web3Service.getTokenBalance();
+            const balanceInEther = web3Service.web3.utils.fromWei(tokenBalance, 'ether');
+            setMinedBalance(balanceInEther);
+            console.log('Initial MINED token balance from blockchain:', balanceInEther);
           }
           
           // Setup listeners
           web3Service.setupAccountListener((account) => {
             setAddress(account);
             if (account) {
-              web3Service.getTokenBalance().then(setTokenBalance);
+              // Get balance directly from blockchain
+              web3Service.getTokenBalance().then((balance) => {
+                const balanceInEther = web3Service.web3.utils.fromWei(balance, 'ether');
+                setMinedBalance(balanceInEther);
+              });
               web3Service.getStakingInfo(account).then((staking) => {
                 setStakingInfo({
                   staked: staking?.stakedAmount || 0,
                   rewards: staking?.rewards || 0,
-                  apy: 0,
+                  apy: staking?.apy || 0,
                   validators: []
                 });
               });
@@ -279,7 +281,14 @@ const Wallet = () => {
 
   const formatBalance = (balance) => {
     if (!balance) return '0 MINED';
-    return `${parseFloat(balance).toFixed(2)} MINED`;
+    
+    // If balance is in wei (large number), convert to ether first
+    let num = parseFloat(balance);
+    if (num > 1e15) { // If it's likely in wei (more than 0.001 ether)
+      num = num / 1e18; // Convert wei to ether
+    }
+    
+    return `${num.toFixed(2)} MINED`;
   };
 
   const formatCurrency = (amount) => {
@@ -1040,6 +1049,14 @@ const Wallet = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <h3>Stake Tokens</h3>
+              <div className="stake-info">
+                <p className="info-text">
+                  <strong>Minimum Stake:</strong> 100 MINED tokens
+                </p>
+                <p className="info-text">
+                  <strong>Current Balance:</strong> {formatBalance(tokenBalance)}
+                </p>
+              </div>
               <form onSubmit={handleStakeTokens}>
                 <div className="form-group">
                   <label htmlFor="validator-address">Validator Address</label>
@@ -1061,9 +1078,11 @@ const Wallet = () => {
                     name="stakeAmount"
                     value={stakeForm.amount}
                     onChange={(e) => setStakeForm({ ...stakeForm, amount: e.target.value })}
-                    placeholder="Enter amount"
+                    placeholder="Enter amount (minimum 100)"
+                    min="100"
                     required
                   />
+                  <small className="form-help">Minimum stake amount is 100 MINED tokens</small>
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowStakeModal(false)}>

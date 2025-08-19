@@ -1,0 +1,13 @@
+{
+  "contractAddress": "0x7877EFAb4aD3610792a135f6f8A241962fD2ab76",
+  "deployer": "0x6fF6dD4E5974B92d64C4068d83095AC1d7c1EC18",
+  "network": "sepolia",
+  "deploymentTime": "2025-08-18T20:52:03.047Z",
+  "totalSupply": "1000000000000000000000000000",
+  "miningRewardsPool": "100000000000000000000000000",
+  "stakingPoolBalance": "200000000000000000000000000",
+  "treasuryPool": "100000000000000000000000000",
+  "researchAccessPool": "100000000000000000000000000",
+  "governancePool": "50000000000000000000000000",
+  "transactionFeePool": "50000000000000000000000000"
+}

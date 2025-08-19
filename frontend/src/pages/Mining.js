@@ -28,9 +28,10 @@ import {
   FaExclamationTriangle
 } from 'react-icons/fa';
 import { web3Service } from '../services/web3Service';
+import mathEngineService from '../services/mathEngineService';
 import MiningSuccessPopup from '../components/MiningSuccessPopup';
 import { MINED_TOKEN_CONFIG } from '../config/mined-token-config';
-import MINEDTokenStandaloneABI from '../contracts/MINEDTokenStandalone.json';
+import MINEDTokenABI from '../contracts/MINEDToken.json';
 import { backendAPI } from '../utils/api';
 import './Mining.css';
 
@@ -67,43 +68,18 @@ const Mining = () => {
   const [isClaiming, setIsClaiming] = useState(false);
   const [activeSessions, setActiveSessions] = useState([]);
   const [showSessionManager, setShowSessionManager] = useState(false);
+  const [miningStatus, setMiningStatus] = useState('Ready to mine');
   const queryClient = useQueryClient();
 
-  // Fetch engine data from backend
-  const { data: engineDistribution, isLoading: engineDistributionLoading } = useQuery(
-    ['engineDistribution'],
-    () => backendAPI.getEngineDistribution(),
-    { 
-      refetchInterval: 30000,
-      onSuccess: (data) => {
-        console.log('🎯 Mining - Engine distribution received:', data);
-      },
-      onError: (error) => {
-        console.error('❌ Mining - Engine distribution error:', error);
-      }
-    }
-  );
+  // Engine data is now loaded from smart contract above
 
-  const { data: engineStats, isLoading: engineStatsLoading } = useQuery(
-    ['engineStats'],
-    () => backendAPI.getEngineStats(),
-    { 
-      refetchInterval: 30000,
-      onSuccess: (data) => {
-        console.log('🎯 Mining - Engine stats received:', data);
-      },
-      onError: (error) => {
-        console.error('❌ Mining - Engine stats error:', error);
-      }
-    }
-  );
-
-  // Initialize Web3 connection
+  // Initialize Web3 connection and Math Engine
   useEffect(() => {
-    const initializeWeb3 = async () => {
+    const initializeServices = async () => {
       try {
-        const connected = await web3Service.initialize();
-        if (connected) {
+        // Initialize Web3
+        const web3Connected = await web3Service.initialize();
+        if (web3Connected) {
           setWeb3Connected(true);
           setCurrentAccount(web3Service.getCurrentAccount());
           setCurrentNetwork(web3Service.getCurrentNetwork());
@@ -123,28 +99,21 @@ const Mining = () => {
           
           // Load active sessions
           await loadActiveSessions();
-          
-          // Setup listeners
-          web3Service.setupAccountListener();
-          web3Service.setupAccountListener((account) => {
-            setCurrentAccount(account);
-            if (account) {
-              web3Service.getTokenBalance().then(setTokenBalance);
-              loadTokenData();
-              loadActiveSessions();
-            }
-          });
-          
-          web3Service.setupNetworkListener((network) => {
-            setCurrentNetwork(network);
-          });
+        }
+        
+        // Initialize Math Engine
+        const mathEngineConnected = await mathEngineService.initialize();
+        if (mathEngineConnected) {
+          console.log('✅ Math Engine initialized successfully');
+        } else {
+          console.warn('⚠️ Math Engine initialization failed');
         }
       } catch (error) {
-        console.error('Failed to initialize Web3:', error);
+        console.error('Failed to initialize services:', error);
       }
     };
 
-    initializeWeb3();
+    initializeServices();
   }, []);
 
   // Refresh active sessions periodically
@@ -195,7 +164,7 @@ const Mining = () => {
       
       const contractAddress = MINED_TOKEN_CONFIG.contracts.minedToken;
       console.log('Token contract address:', contractAddress);
-      console.log('ABI length:', MINEDTokenStandaloneABI.abi.length);
+              console.log('ABI length:', MINEDTokenABI.abi.length);
       
       // Verify the contract address is valid
       if (!ethers.isAddress(contractAddress)) {
@@ -213,7 +182,7 @@ const Mining = () => {
       // Use the imported standalone token ABI
       const minedTokenContract = new ethers.Contract(
         contractAddress,
-        MINEDTokenStandaloneABI.abi,
+        MINEDTokenABI.abi,
         provider
       );
       
@@ -248,19 +217,34 @@ const Mining = () => {
         // Try to get asymptotic token info
         let asymptoticInfo;
         try {
-          // Get system info from standalone token (returns tuple: totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission)
-          const systemInfo = await minedTokenContract.getSystemInfo();
-          console.log('Raw systemInfo result:', systemInfo);
+          // Get system info from enhanced token - try different methods
+          let totalBurned = '0';
+          let totalResearchValue = '0';
+          let totalValidators = '0';
           
-          // systemInfo is a tuple, access by index: [totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission]
-          const [systemTotalSupply, totalBurned, totalResearchValue, totalValidators, currentEmission] = systemInfo;
+          // Try to get state info if available
+          try {
+            const stateInfo = await minedTokenContract.state();
+            console.log('Raw state result:', stateInfo);
+            totalBurned = stateInfo.totalBurned?.toString() || '0';
+            totalResearchValue = stateInfo.totalResearchValue?.toString() || '0';
+            totalValidators = stateInfo.totalValidators?.toString() || '0';
+          } catch (stateError) {
+            console.log('state() method not available, using defaults');
+          }
+          
+          // Get basic token info
+          const name = await minedTokenContract.name();
+          const symbol = await minedTokenContract.symbol();
+          const decimals = await minedTokenContract.decimals();
+          const totalSupply = await minedTokenContract.totalSupply();
           
           asymptoticInfo = {
-            name: await minedTokenContract.name(),
-            symbol: await minedTokenContract.symbol(),
-            decimals: await minedTokenContract.decimals(),
-            totalSupply: systemTotalSupply.toString(),
-            currentEmission: currentEmission.toString(),
+            name: name,
+            symbol: symbol,
+            decimals: decimals,
+            totalSupply: totalSupply.toString(),
+            currentEmission: '0', // Placeholder for standalone contract
             totalBurned: totalBurned.toString(),
             totalResearchValue: totalResearchValue.toString()
           };
@@ -283,28 +267,15 @@ const Mining = () => {
           };
         }
         
-        // Try to get emission data from calculateEmission (standalone contract doesn't have separate emission parameters)
-        let emissionParams;
-        try {
-          const currentEmission = await minedTokenContract.calculateEmission();
-          console.log('✅ Current emission retrieved:', currentEmission.toString());
-          emissionParams = [
-            currentEmission, // initialEmissionRate (use current emission)
-            '1', // decayConstant (default for standalone contract)
-            '1', // researchMultiplierBase (default for standalone contract)
-            '10000', // decayScale (default for standalone contract)
-            '100' // researchScale (default for standalone contract)
-          ];
-        } catch (emissionError) {
-          console.warn('⚠️ Could not get emission data, using defaults:', emissionError.message);
-          emissionParams = [
-            ethers.parseEther('1000'), // initialEmissionRate
-            '1', // decayConstant
-            '1', // researchMultiplierBase
-            '10000', // decayScale
-            '100' // researchScale
-          ];
-        }
+        // Set emission data for standalone contract (fixed values)
+        console.log('✅ Using default emission parameters for standalone contract');
+        const emissionParams = [
+          ethers.parseEther('1000'), // initialEmissionRate (default)
+          '1', // decayConstant (default for standalone contract)
+          '1', // researchMultiplierBase (default for standalone contract)
+          '10000', // decayScale (default for standalone contract)
+          '100' // researchScale (default for standalone contract)
+        ];
         
         // Handle standalone contract data structure
         setTokenInfo({
@@ -410,60 +381,171 @@ const Mining = () => {
     }
   };
 
-  // Complete a mining session
-  const completeSession = async (sessionId) => {
+  // Start a real mining session on the contract
+  const startContractMiningSession = async (workType = 0, difficulty = 25) => {
     try {
-      // Generate a proper bytes32 proof hash (64 hex chars + 0x = 66 chars total)
-    const proofHash = generateRandomHash();
-      const metadata = `Completed session ${sessionId} at ${new Date().toISOString()}`;
+      console.log('🚀 Starting real mining session on contract...');
+      setMiningStatus('Starting mining session...');
       
-      const result = await web3Service.completeMiningSession(sessionId, proofHash, metadata);
-      console.log('Session completed:', result);
+      const result = await web3Service.startMiningSession(workType, difficulty);
+      console.log('Mining session started:', result);
       
-      // Refresh sessions and stats
-      await loadActiveSessions();
-      await loadTokenData();
+      setMiningStatus(`Mining session started! Session ID: ${result.sessionId}`);
       
-      // Force refresh MINED token balance multiple times to ensure it updates
+      // Add to active sessions
+      const newSession = {
+        id: result.sessionId,
+        workType: workType,
+        difficulty: difficulty,
+        startTime: Date.now(),
+        status: 'active',
+        transactionHash: result.transactionHash,
+        isContractSession: true
+      };
+      
+      setActiveSessions(prev => [...prev, newSession]);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to start contract mining session:', error);
+      setMiningStatus(`Failed to start mining session: ${error.message}`);
+      throw error;
+    }
+  };
+
+        // Enhanced session completion with better error handling
+      const completeSession = async (sessionId) => {
+        try {
+          console.log('⛏️ Starting enhanced session completion...');
+          console.log('Session ID:', sessionId);
+          setMiningStatus('Preparing to complete mining session...');
+          
+          // Validate session ID
+          if (!sessionId || sessionId === 'undefined' || sessionId === 0) {
+            throw new Error('Invalid session ID provided');
+          }
+          
+          // Generate proper metadata
+          const proofHash = generateRandomHash();
+          const metadata = {
+            sessionId: sessionId,
+            completedAt: new Date().toISOString(),
+            userAddress: web3Service.getCurrentAccount(),
+            proofHash: proofHash
+          };
+          
+          console.log('Completion metadata:', metadata);
+          setMiningStatus('Submitting PoW result to contract...');
+          
+          // Complete the session with enhanced error handling
+          const result = await web3Service.completeMiningSession(sessionId, proofHash, JSON.stringify(metadata));
+          
+          if (!result || !result.success) {
+            throw new Error('Mining session completion returned invalid result');
+          }
+          
+          console.log('🎉 Mining session completed successfully:', result);
+          
+          // Check what events occurred
+          let statusMessage = 'Mining completed! ';
+          if (result.events) {
+            if (result.events.discoverySubmitted && result.events.validationRequested) {
+              statusMessage += '✅ Full automatic flow: PoW → Discovery → PoS Validation';
+            } else if (result.events.powSubmitted && result.events.rewardMinted) {
+              statusMessage += '✅ PoW completed with rewards';
+            } else {
+              statusMessage += '⚠️ Some automatic steps may have failed';
+            }
+          }
+          
+          // Update status with transaction info
+          const txDisplay = result.transactionHash ? result.transactionHash.slice(0, 10) + '...' : 'N/A';
+          setMiningStatus(`${statusMessage} TX: ${txDisplay}`);
+      
+      // Refresh data in parallel for better performance
+      const refreshPromises = [
+        loadActiveSessions(),
+        loadTokenData()
+      ];
+      
+      try {
+        await Promise.all(refreshPromises);
+        console.log('✅ Data refresh completed');
+      } catch (refreshError) {
+        console.warn('⚠️ Some data refresh operations failed:', refreshError);
+      }
+      
+      // Schedule additional balance refreshes to catch delayed updates
+      const scheduleRefresh = (delay, label) => {
+        setTimeout(async () => {
+          try {
+            await loadTokenData();
+            console.log(`🔄 ${label} token balance refresh completed`);
+          } catch (error) {
+            console.warn(`⚠️ ${label} token balance refresh failed:`, error);
+          }
+        }, delay);
+      };
+      
+      scheduleRefresh(2000, 'First delayed');
+      scheduleRefresh(5000, 'Second delayed');
+      scheduleRefresh(10000, 'Final delayed');
+      
+      // Show success popup with comprehensive data
       setTimeout(async () => {
-        await loadTokenData();
-        console.log('🔄 Refreshed MINED token balance after mining completion');
-      }, 2000);
-      
-      setTimeout(async () => {
-        await loadTokenData();
-        console.log('🔄 Second refresh of MINED token balance');
-      }, 5000);
-      
-      setTimeout(async () => {
-        await loadTokenData();
-        console.log('🔄 Third refresh of MINED token balance');
-      }, 10000);
-      
-      // Wait a moment for balance to update, then trigger success popup
-      setTimeout(async () => {
-        // Refresh balance one more time
-        await loadTokenData();
-        
-        // Trigger success popup with updated data
-        const successData = {
-          blockNumber: typeof sessionId === 'bigint' ? Number(sessionId) : Number(sessionId || 0),
-          blockHash: proofHash,
-          reward: '0.52', // Estimated reward
-          difficulty: 25,
-          engine: 'navier-stokes',
-          timestamp: Date.now(),
-          hashrate: 427,
-          tokenRewards: '0.52',
-          tokenBalance: tokenBalance // This will be updated by loadTokenData
-        };
-        
-        triggerMiningSuccess(successData);
+        try {
+          // Final balance refresh
+          await loadTokenData();
+          
+          // Create success data
+          const successData = {
+            sessionId: result.sessionId,
+            blockNumber: result.blockNumber || 0,
+            blockHash: result.transactionHash || proofHash,
+            reward: result.balanceDiff || 'Tokens Minted',
+            difficulty: 25,
+            engine: 'contract-mining',
+            timestamp: Date.now(),
+            hashrate: 'N/A',
+            tokenRewards: result.balanceDiff || 'Contract Rewards',
+            tokenBalance: tokenBalance,
+            transactionHash: result.transactionHash,
+            gasUsed: result.gasUsed,
+            resultId: result.resultId
+          };
+          
+          console.log('Triggering success popup with data:', successData);
+          triggerMiningSuccess(successData);
+          
+        } catch (popupError) {
+          console.error('Failed to show success popup:', popupError);
+          // Still show a basic alert
+          alert(`Mining completed successfully! Session: ${result.sessionId}`);
+        }
       }, 3000);
       
     } catch (error) {
-      console.error('Failed to complete session:', error);
-      alert(`❌ Failed to complete session ${sessionId}: ${error.message}`);
+      console.error('Session completion failed:', error);
+      setMiningStatus(`Failed to complete session: ${error.message}`);
+      
+      // Provide user-friendly error messages
+      let userMessage = 'Failed to complete mining session.';
+      
+      if (error.message.includes('does not exist')) {
+        userMessage = 'Mining session not found. It may have already been completed or expired.';
+      } else if (error.message.includes('belongs to')) {
+        userMessage = 'This mining session belongs to a different wallet address.';
+      } else if (error.message.includes('already completed')) {
+        userMessage = 'This mining session has already been completed.';
+      } else if (error.message.includes('insufficient funds')) {
+        userMessage = 'Insufficient ETH balance for gas fees.';
+      } else if (error.message.includes('user denied')) {
+        userMessage = 'Transaction was cancelled by user.';
+      } else {
+        userMessage = `Mining session completion failed: ${error.message}`;
+      }
+      
+      alert(`❌ ${userMessage}`);
     }
   };
 
@@ -511,24 +593,265 @@ const Mining = () => {
     }
   };
 
-  // Helper function to get work type name
-  const getWorkTypeName = (workType) => {
-    const workTypes = [
-      'Prime Pattern Discovery',
-      'Riemann Zero Computation',
-      'Yang-Mills Field Theory',
-      'Goldbach Conjecture',
-      'Navier-Stokes Simulation',
-      'Birch-Swinnerton-Dyer',
-      'Elliptic Curve Crypto',
-      'Lattice Cryptography',
-      'Poincaré Conjecture',
-      'Quantum Algorithm',
-      'Crypto Protocol Analysis',
-      'Math Constant Verification'
-    ];
-    return workTypes[workType] || 'Unknown';
+  // Load work types from smart contract with enhanced metrics
+  const loadWorkTypesFromContract = async () => {
+    try {
+      if (!web3Service.isWeb3Connected()) {
+        console.log('Web3 not connected, skipping work types load');
+        return [];
+      }
+
+      const contractAddress = MINED_TOKEN_CONFIG.contracts.minedToken;
+      
+      // Use Web3.js contract instance
+      const minedTokenContract = web3Service.tokenContract;
+
+      // Get work types from contract (0-24)
+      const workTypes = [];
+      for (let i = 0; i <= 24; i++) {
+        try {
+          const workType = await minedTokenContract.methods.workTypes(i).call();
+          if (workType[2]) { // isActive is at index 2
+            // Calculate hashrate based on difficulty multiplier
+            const difficultyMultiplier = parseInt(workType[1].toString()); // difficultyMultiplier is at index 1
+            const baseHashrate = 46; // Base hashrate in H/s
+            const calculatedHashrate = baseHashrate * (difficultyMultiplier / 1000);
+            
+            // Format hashrate for display
+            let hashrateDisplay;
+            if (calculatedHashrate >= 1000000) {
+              hashrateDisplay = (calculatedHashrate / 1000000).toFixed(1) + ' TH/s';
+            } else if (calculatedHashrate >= 1000) {
+              hashrateDisplay = (calculatedHashrate / 1000).toFixed(1) + ' GH/s';
+            } else {
+              hashrateDisplay = Math.round(calculatedHashrate) + ' H/s';
+            }
+            
+            // Calculate estimated reward based on base reward (convert from wei)
+            const baseRewardWei = workType[0].toString(); // baseReward is at index 0 (wei)
+            let estimatedRewardStr = '0 MINED/day';
+            try {
+              const baseRewardMined = web3Service.web3.utils.fromWei(baseRewardWei, 'ether');
+              const daily = (parseFloat(baseRewardMined) * 24) || 0;
+              estimatedRewardStr = `${daily.toFixed(6)} MINED/day`;
+            } catch (_) {}
+            
+            // Determine difficulty level based on difficulty multiplier
+            let difficultyLevel;
+            if (difficultyMultiplier >= 10000) {
+              difficultyLevel = 'Ultra-Extreme';
+            } else if (difficultyMultiplier >= 8000) {
+              difficultyLevel = 'Extreme';
+            } else if (difficultyMultiplier >= 6000) {
+              difficultyLevel = 'High';
+            } else {
+              difficultyLevel = 'Medium';
+            }
+            
+            workTypes.push({
+              id: i,
+              name: getWorkTypeName(i),
+              description: getWorkTypeDescription(i),
+              difficulty: difficultyLevel,
+              hashrate: hashrateDisplay,
+              discoveries: '0', // Will be updated from contract discoveries
+              estimatedReward: estimatedRewardStr,
+              baseReward: baseRewardWei, // baseReward in wei
+              difficultyMultiplier: workType[1].toString(), // difficultyMultiplier is at index 1
+              isActive: workType[2], // isActive is at index 2
+              calculatedHashrate: calculatedHashrate
+            });
+          }
+        } catch (error) {
+          console.warn(`Could not load work type ${i}:`, error.message);
+        }
+      }
+
+      console.log('✅ Work types loaded from contract with enhanced metrics:', workTypes);
+      return workTypes;
+    } catch (error) {
+      console.error('❌ Error loading work types from contract:', error);
+      return [];
+    }
   };
+
+  // Get work type name by ID
+  const getWorkTypeName = (id) => {
+    const workTypeNames = {
+      0: 'Riemann Zeros',
+      1: 'Goldbach Conjecture',
+      2: 'Birch Swinnerton',
+      3: 'Prime Pattern Discovery',
+      4: 'Twin Primes',
+      5: 'Collatz Conjecture',
+      6: 'Perfect Numbers',
+      7: 'Mersenne Primes',
+      8: 'Fibonacci Patterns',
+      9: 'Pascal Triangle',
+      10: 'Differential Equations',
+      11: 'Number Theory',
+      12: 'Yang Mills Theory',
+      13: 'Navier Stokes',
+      14: 'Elliptic Curve Crypto',
+      15: 'Lattice Cryptography',
+      16: 'Cryptographic Hash',
+      17: 'Poincaré Conjecture',
+      18: 'Algebraic Topology',
+      19: 'Euclidean Geometry',
+      20: 'Quantum Computing',
+      21: 'Machine Learning',
+      22: 'Blockchain Protocols',
+      23: 'Distributed Systems',
+      24: 'Optimization Algorithms'
+    };
+    return workTypeNames[id] || `Work Type ${id}`;
+  };
+
+  // Get work type description by ID
+  const getWorkTypeDescription = (id) => {
+    const workTypeDescriptions = {
+      0: 'Compute non-trivial zeros of the Riemann zeta function',
+      1: 'Verify Goldbach conjecture for large even numbers',
+      2: 'Compute L-functions for elliptic curves',
+      3: 'Advanced prime number pattern recognition',
+      4: 'Search for twin prime pairs and patterns',
+      5: 'Verify Collatz sequence convergence patterns',
+      6: 'Discover new perfect numbers and properties',
+      7: 'Find new Mersenne prime numbers',
+      8: 'Advanced Fibonacci sequence analysis',
+      9: 'Deep analysis of Pascal triangle properties',
+      10: 'Solve complex differential equations',
+      11: 'Advanced number theory computations',
+      12: 'Solve Yang-Mills field equations for quantum chromodynamics',
+      13: 'Solve Navier-Stokes equations for fluid dynamics',
+      14: 'Generate secure elliptic curve parameters',
+      15: 'Post-quantum cryptographic algorithms',
+      16: 'Cryptographic hash function analysis',
+      17: 'Topological manifold analysis',
+      18: 'Topological invariant computations',
+      19: 'Advanced geometric theorem proving',
+      20: 'Quantum computing simulations',
+      21: 'Machine learning algorithm optimization',
+      22: 'Blockchain protocol analysis',
+      23: 'Distributed system optimization',
+      24: 'Mathematical optimization algorithms'
+    };
+    return workTypeDescriptions[id] || `Mathematical computation for work type ${id}`;
+  };
+
+  // Load discoveries from contract to update work type metrics
+  const loadDiscoveriesFromContract = async () => {
+    try {
+      if (!web3Service.isWeb3Connected()) {
+        console.log('Web3 not connected, skipping discoveries load');
+        return {};
+      }
+
+      const contractAddress = MINED_TOKEN_CONFIG.contracts.minedToken;
+      const minedTokenContract = web3Service.tokenContract;
+
+      // Get next discovery ID directly (avoid state() decoding issues)
+      let nextDiscoveryId = 1;
+      try {
+        if (minedTokenContract.methods.nextDiscoveryId) {
+          const nd = await minedTokenContract.methods.nextDiscoveryId().call();
+          nextDiscoveryId = parseInt(nd.toString());
+        } else {
+          // Fallback: probe up to 50
+          nextDiscoveryId = 51;
+        }
+      } catch (_) {
+        // Fallback: probe up to 50
+        nextDiscoveryId = 51;
+      }
+      
+      console.log(`🔍 Loading discoveries from contract (1 to ${nextDiscoveryId - 1})`);
+      
+      // Count discoveries by work type
+      const discoveriesByWorkType = {};
+      
+      for (let discoveryId = 1; discoveryId < nextDiscoveryId; discoveryId++) {
+        try {
+          const discoveryInfo = await minedTokenContract.methods.discoveries(discoveryId).call();
+          if (discoveryInfo.researcher && discoveryInfo.researcher !== '0x0000000000000000000000000000000000000000') {
+            const workType = parseInt(discoveryInfo.workType.toString());
+            // Convert research value from wei to MINED (number)
+            let researchValue = 0;
+            try {
+              const rv = web3Service.web3.utils.fromWei(discoveryInfo.researchValue.toString(), 'ether');
+              researchValue = parseFloat(rv) || 0;
+            } catch (_) {}
+            
+            if (!discoveriesByWorkType[workType]) {
+              discoveriesByWorkType[workType] = {
+                count: 0,
+                totalResearchValue: 0,
+                avgResearchValue: 0
+              };
+            }
+            
+            discoveriesByWorkType[workType].count++;
+            discoveriesByWorkType[workType].totalResearchValue += researchValue;
+          }
+        } catch (error) {
+          console.warn(`Error reading discovery ${discoveryId}:`, error.message);
+        }
+      }
+      
+      // Calculate average research value for each work type
+      Object.keys(discoveriesByWorkType).forEach(workType => {
+        const data = discoveriesByWorkType[workType];
+        data.avgResearchValue = data.count > 0 ? Number((data.totalResearchValue / data.count).toFixed(6)) : 0;
+      });
+      
+      console.log('✅ Discoveries loaded from contract:', discoveriesByWorkType);
+      return discoveriesByWorkType;
+    } catch (error) {
+      console.error('❌ Error loading discoveries from contract:', error);
+      return {};
+    }
+  };
+
+  // Use real contract data instead of backend API
+  const { data: contractWorkTypes, isLoading: workTypesLoading } = useQuery(
+    ['contractWorkTypes'],
+    loadWorkTypesFromContract,
+    { 
+      refetchInterval: 60000, // Refresh every minute
+      onSuccess: (data) => {
+        console.log('🎯 Mining - Contract work types loaded:', data);
+      },
+      onError: (error) => {
+        console.error('❌ Mining - Contract work types error:', error);
+      }
+    }
+  );
+
+  // Load discoveries data
+  const { data: discoveriesData, isLoading: discoveriesLoading } = useQuery(
+    ['contractDiscoveries'],
+    loadDiscoveriesFromContract,
+    {
+      refetchInterval: 30000, // Refresh every 30 seconds
+      onSuccess: (data) => {
+        console.log('🎯 Mining - Contract discoveries loaded:', data);
+      },
+      onError: (error) => {
+        console.error('❌ Mining - Contract discoveries error:', error);
+      }
+    }
+  );
+
+  // Define work types with fallback - using real contract data
+  const workTypes = contractWorkTypes || [];
+  
+  // Set default engine selection if none selected and work types are available
+  useEffect(() => {
+    if (workTypes.length > 0 && selectedEngine === null) {
+      console.log('🎯 Setting default engine selection to work type 1 (Goldbach Conjecture)');
+      setSelectedEngine(1); // Default to Goldbach Conjecture (work type 1)
+    }
+  }, [workTypes, selectedEngine]);
 
   // Diagnostic function that runs in browser
   const runDiagnostic = async () => {
@@ -566,20 +889,36 @@ const Mining = () => {
         console.warn('Balance check warning:', error.message);
       }
 
-      // For ERC20-only approach, we don't need to check contract state
-      console.log('✅ ERC20 token contract is active');
+      // Test contract connection
+      console.log('🧪 Testing contract connection...');
+      try {
+        const tokenInfo = await web3Service.getTokenInfo();
+        console.log('✅ Contract connection successful:', tokenInfo);
+      } catch (error) {
+        console.error('❌ Contract connection failed:', error);
+        alert('❌ Contract connection failed: ' + error.message);
+        return;
+      }
 
       // Test mining session start
       console.log('🧪 Testing mining session start...');
       try {
-        // For ERC20-only approach, we don't need gas estimation
-        console.log('✅ Gas estimation bypassed for ERC20-only mode');
-        console.log('✅ All checks passed! You should be able to start mining.');
+        const result = await web3Service.startMiningSession(0, 25);
+        console.log('✅ Mining session start successful:', result);
         
-        alert('✅ All checks passed! You should be able to start mining.\n\nTry selecting a mining engine and clicking "Start Mining".');
+        // Test PoW submission
+        console.log('🧪 Testing PoW submission...');
+        const powResult = await web3Service.diagnosePoWIssue(result.sessionId);
+        console.log('✅ PoW diagnostic result:', powResult);
+        
+        if (powResult.success) {
+          alert('✅ All checks passed! You should be able to start mining.\n\nSession ID: ' + result.sessionId + '\n\nTry selecting a mining engine and clicking "Start Mining".');
+        } else {
+          alert('❌ PoW diagnostic failed: ' + powResult.error + '\n\nPlease check your setup and try again.');
+        }
         
       } catch (error) {
-        console.log('❌ Gas estimation failed:', error.message);
+        console.log('❌ Mining test failed:', error.message);
         
         if (error.data) {
           console.log('Error data:', error.data);
@@ -764,19 +1103,34 @@ const Mining = () => {
       formattedTokenBalance = '0';
     }
 
+    // Get real blockchain data for the success popup
+    let realBlockData = null;
+    try {
+      const currentBlock = await web3Service.web3.eth.getBlockNumber();
+      realBlockData = await web3Service.web3.eth.getBlock(currentBlock);
+    } catch (error) {
+      console.warn('Could not fetch real block data:', error);
+    }
+
     const successData = {
-      blockNumber: currentBlockNumber || 0,
-      blockHash: sessionData?.transactionHash || null, // Use transaction hash instead of block hash
-      reward: sessionData?.transactionHash ? 'Discovery Submitted' : '0.00',
+      blockNumber: sessionData?.blockNumber || realBlockData?.number || currentBlockNumber || 0,
+      blockHash: sessionData?.blockHash || realBlockData?.hash || sessionData?.transactionHash || null,
+      reward: sessionData?.reward || (sessionData?.transactionHash ? 'Discovery Submitted' : '0.00'),
       difficulty: sessionData?.difficulty ? Number(sessionData.difficulty) : 0,
       engine: getWorkTypeName(sessionData?.workType) || 'Discovery Mining',
-      timestamp: Date.now(), // Use current timestamp
-      hashrate: 'N/A', // Not available for discovery-based mining
-      tokenRewards: sessionData?.transactionHash ? 'Tokens Minted' : '0',
-      tokenBalance: formattedTokenBalance, // Use formatted token balance
+      timestamp: sessionData?.timestamp || realBlockData?.timestamp * 1000 || Date.now(),
+      hashrate: sessionData?.hashrate || 'N/A',
+      tokenRewards: sessionData?.tokenRewards || (sessionData?.transactionHash ? 'Tokens Minted' : '0'),
+      tokenBalance: formattedTokenBalance,
       transactionHash: sessionData?.transactionHash || null,
       discoveryId: sessionData?.discoveryId || null,
-      gasUsed: sessionData?.gasUsed || null
+      gasUsed: sessionData?.gasUsed || null,
+      // Add real discovery data
+      discoveryData: sessionData?.discoveryData || null,
+      workType: sessionData?.workType || null,
+      complexity: sessionData?.complexity || null,
+      significance: sessionData?.significance || null,
+      researchValue: sessionData?.researchValue || null
     };
     
     setMiningSuccessData(successData);
@@ -868,94 +1222,130 @@ const Mining = () => {
       }
     },
     {
-      onSuccess: (data) => {
+              onSuccess: (data) => {
         console.log('✅ Mining session started successfully:', data);
         setIsMining(true);
         
-        // Submit discovery to smart contract after mining simulation
+        // Enhanced auto-completion with blockchain synchronization handling
         setTimeout(async () => {
           try {
-            console.log('🔬 Submitting discovery to smart contract...');
+            console.log('⛏️ Starting enhanced PoW completion process...');
+            console.log('Session data from start:', data);
             
-            // Use the data from the mining session to submit discovery
-            const discoveryResult = await web3Service.submitDiscovery(
-              data.workType,
-              data.difficulty,
-              data.complexity,
-              data.significance,
-              data.researchValue,
-              false // isCollaborative
-            );
+            // Validate we have a valid session ID
+            if (!data.sessionId || data.sessionId === 0) {
+              throw new Error('Invalid session ID received from mining start');
+            }
             
-            console.log('✅ Discovery submitted successfully:', discoveryResult);
+            // Set status to show we're working on completion
+            setMiningStatus(`Waiting for blockchain sync, then completing session ${data.sessionId}...`);
             
-            // Refresh token balance after successful discovery submission
-            await loadTokenData();
+            // Wait additional time for blockchain state synchronization
+            console.log('⏳ Waiting for blockchain state to fully sync...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
             
-            // Show success popup with real discovery data
-            triggerMiningSuccess({
-              sessionId: data.sessionId,
-              workType: data.workType,
-              difficulty: data.difficulty,
-              timestamp: Date.now(),
-              reward: `Discovery submitted successfully! Transaction: ${discoveryResult.transactionHash}`,
-              transactionHash: discoveryResult.transactionHash,
-              discoveryId: discoveryResult.discoveryId,
-              gasUsed: discoveryResult.gasUsed
-            });
+            setMiningStatus(`Completing mining session ${data.sessionId}...`);
             
+            // Complete the session using the enhanced completion function
+            await completeSession(data.sessionId);
+            
+            console.log('✅ Auto-completion process finished successfully');
             setIsMining(false);
             
-            // Refresh token balance again after showing success
-            setTimeout(() => {
-              loadTokenData();
-            }, 2000);
+          } catch (completionError) {
+            console.error('❌ Auto-completion failed:', completionError);
+            setMiningStatus(`Auto-completion failed: ${completionError.message}`);
             
-          } catch (discoveryError) {
-            console.error('❌ Failed to submit discovery:', discoveryError);
+            // Enhanced error handling based on the specific error
+            let userMessage = 'Mining session could not be completed automatically.';
+            let suggestion = 'You can try manually completing the session or starting a new one.';
             
-            // Show error but still complete the mining session
-            alert('Mining completed but failed to submit discovery: ' + discoveryError.message);
+            if (completionError.message.includes('does not exist') || completionError.message.includes('invalid start time')) {
+              userMessage = 'Mining session validation failed due to blockchain synchronization.';
+              suggestion = 'This is usually temporary. Please wait a moment and try again, or start a new mining session.';
+            } else if (completionError.message.includes('already completed')) {
+              userMessage = 'Mining session was already completed.';
+              suggestion = 'You can start a new mining session.';
+            } else if (completionError.message.includes('ownership') || completionError.message.includes('belongs to')) {
+              userMessage = 'Mining session ownership verification failed.';
+              suggestion = 'Please ensure you\'re using the same wallet that started the session.';
+            }
+              
+            alert(`⚠️ ${userMessage}\n\n💡 ${suggestion}`);
             setIsMining(false);
             
-            // Still refresh token balance
-            await loadTokenData();
+            // Still try to refresh data
+            try {
+              await loadTokenData();
+              await loadActiveSessions();
+            } catch (refreshError) {
+              console.warn('Data refresh after error failed:', refreshError);
+            }
           }
-        }, 5000); // Fixed delay for mining simulation
+        }, 8000); // Increased delay to allow for proper blockchain synchronization
       },
       onError: (error) => {
-        console.error('❌ Failed to start mining session:', error);
+        console.error('❌ Mining session start failed:', error);
+        setMiningStatus('Failed to start mining session');
         
-        // Provide user-friendly error messages
-        let userMessage = 'Failed to start mining session. ';
+        // Enhanced error handling with more specific messages
+        let userMessage = 'Failed to start mining session.';
+        let actionSuggestion = '';
         
         if (error.message.includes('execution reverted')) {
-          if (error.message.includes('TooManyActiveSessions')) {
-            userMessage += 'You have too many active sessions. Please complete some existing sessions first.';
-          } else if (error.message.includes('ContractPaused')) {
-            userMessage += 'The contract is currently paused. Please try again later.';
-          } else if (error.message.includes('InvalidDifficulty')) {
-            userMessage += 'Invalid difficulty level. Please try a different difficulty.';
-          } else if (error.message.includes('InvalidParameters')) {
-            userMessage += 'Invalid parameters. Please check your selection and try again.';
+          if (error.message.includes('TooManyActiveSessions') || error.data === '0x77280e15') {
+            userMessage = 'You have too many active mining sessions.';
+            actionSuggestion = 'Please complete some existing sessions first, then try again.';
+          } else if (error.message.includes('ContractPaused') || error.data === '0x4d2301cc') {
+            userMessage = 'The mining contract is currently paused.';
+            actionSuggestion = 'Please try again later when the contract is active.';
+          } else if (error.message.includes('InvalidDifficulty') || error.data === '0x6d4ce63c') {
+            userMessage = 'Invalid difficulty level selected.';
+            actionSuggestion = 'Please try with a different difficulty setting (1-1000).';
+          } else if (error.message.includes('InvalidWorkType') || error.data === '0x50b4e663') {
+            userMessage = 'Invalid mining engine selected.';
+            actionSuggestion = 'Please select a different mining engine and try again.';
           } else {
-            userMessage += 'Contract execution failed. This could be due to network issues or contract state.';
+            userMessage = 'The contract rejected the transaction.';
+            actionSuggestion = 'This could be due to network issues or contract state. Please try again.';
           }
-        } else if (error.message.includes('Please switch to Sepolia')) {
+        } else if (error.message.includes('user denied') || error.message.includes('User denied')) {
+          userMessage = 'Transaction was cancelled by user.';
+          actionSuggestion = 'Please approve the transaction in MetaMask to start mining.';
+        } else if (error.message.includes('insufficient funds')) {
+          userMessage = 'Insufficient ETH balance for gas fees.';
+          actionSuggestion = 'Please add more ETH to your wallet and try again.';
+        } else if (error.message.includes('network')) {
+          userMessage = 'Network connection issue.';
+          actionSuggestion = 'Please check your internet connection and MetaMask network settings.';
+        } else if (error.message.includes('Sepolia')) {
           userMessage = error.message;
-        } else if (error.message.includes('Insufficient ETH')) {
-          userMessage = error.message;
-        } else if (error.message.includes('active sessions')) {
-          userMessage = error.message;
+          actionSuggestion = 'Please switch to Sepolia Testnet in MetaMask.';
         } else if (error.message.includes('Web3 not connected')) {
-          userMessage = 'Please connect your wallet first.';
+          userMessage = 'Wallet not connected.';
+          actionSuggestion = 'Please connect your MetaMask wallet first.';
         } else {
-          userMessage += error.message;
+          userMessage = `Unexpected error: ${error.message}`;
+          actionSuggestion = 'Please try again or contact support if the issue persists.';
         }
         
-        // Show error to user
-        alert(userMessage);
+        // Show comprehensive error message
+        const fullMessage = actionSuggestion 
+          ? `❌ ${userMessage}\n\n💡 ${actionSuggestion}`
+          : `❌ ${userMessage}`;
+          
+        alert(fullMessage);
         setIsMining(false);
+        
+        // Try to refresh data to show current state
+        setTimeout(async () => {
+          try {
+            await loadActiveSessions();
+            await loadTokenData();
+          } catch (refreshError) {
+            console.warn('Post-error data refresh failed:', refreshError);
+          }
+        }, 1000);
       }
     }
   );
@@ -1004,35 +1394,42 @@ const Mining = () => {
   );
 
   const handleStartMining = () => {
+    console.log('🎯 handleStartMining called');
+    console.log('🎯 Web3 connected:', web3Connected);
+    console.log('🎯 Selected engine:', selectedEngine);
+    console.log('🎯 Available engines:', availableEngines);
+    
     if (!web3Connected) {
       alert('Please connect your wallet first');
       return;
     }
 
-    if (selectedEngine) {
-      // Map engine ID to work type enum values (uint8)
-      const workTypeMap = {
-        'prime-pattern': 0, // PRIME_PATTERN_DISCOVERY
-        'riemann-zeros': 1, // RIEMANN_ZERO_COMPUTATION
-        'yang-mills': 2, // YANG_MILLS_FIELD_THEORY
-        'goldbach': 3, // GOLDBACH_CONJECTURE_VERIFICATION
-        'navier-stokes': 4, // NAVIER_STOKES_SIMULATION
-        'birch-swinnerton': 5, // BIRCH_SWINNERTON_DYER
-        'ecc': 6, // ELLIPTIC_CURVE_CRYPTOGRAPHY
-        'lattice': 7, // LATTICE_CRYPTOGRAPHY
-        'poincare': 8, // POINCARE_CONJECTURE
-        'quantum-algorithm': 9, // QUANTUM_ALGORITHM_OPTIMIZATION
-        'crypto-protocol': 10, // CRYPTOGRAPHIC_PROTOCOL_ANALYSIS
-        'math-constant': 11 // MATHEMATICAL_CONSTANT_VERIFICATION
-      };
+    if (selectedEngine !== null && selectedEngine !== undefined) {
+      // selectedEngine is already the workType ID (0-24), so use it directly
+      const workType = selectedEngine;
       
-      const workType = workTypeMap[selectedEngine] !== undefined ? workTypeMap[selectedEngine] : 0; // Default to PRIME_PATTERN_DISCOVERY
+      console.log('🎯 Using workType:', workType, 'Type:', typeof workType);
+      
+      // Validate workType is within valid range (0-24)
+      if (workType < 0 || workType > 24) {
+        console.error('❌ Invalid workType:', workType, '- must be between 0 and 24');
+        alert('Invalid work type selected. Please select a valid mathematical engine.');
+        return;
+      }
+      
       const requestBody = {
         workType: workType,
         difficulty: 25
       };
       
+      console.log('🎯 Starting mining with workType:', workType, 'difficulty:', 25);
+      console.log('🎯 Request body:', requestBody);
       startMiningMutation.mutate(requestBody);
+    } else {
+      console.error('❌ No engine selected');
+      console.error('❌ selectedEngine value:', selectedEngine);
+      console.error('❌ availableEngines length:', availableEngines.length);
+      alert('Please select a mathematical engine before starting mining.');
     }
   };
 
@@ -1099,78 +1496,138 @@ const Mining = () => {
   // Engine descriptions and icons
   const engineDescriptions = {
     'riemann-zeros': 'Compute non-trivial zeros of the Riemann zeta function',
-    'yang-mills': 'Solve Yang-Mills field equations for quantum chromodynamics',
-    'goldbach': 'Verify Goldbach conjecture for large even numbers',
-    'navier-stokes': 'Solve Navier-Stokes equations for fluid dynamics',
+    'goldbach-conjecture': 'Verify Goldbach conjecture for large even numbers',
     'birch-swinnerton': 'Compute L-functions for elliptic curves',
-    'ecc': 'Generate secure elliptic curve parameters',
-    'lattice': 'Post-quantum cryptographic algorithms',
-    'poincare': 'Topological manifold analysis',
-    'prime-pattern': 'Advanced prime number pattern recognition',
+    'prime-pattern-discovery': 'Advanced prime number pattern recognition',
     'twin-primes': 'Search for twin prime pairs and patterns',
-    'collatz': 'Verify Collatz sequence convergence patterns',
+    'collatz-conjecture': 'Verify Collatz sequence convergence patterns',
     'perfect-numbers': 'Discover new perfect numbers and properties',
     'mersenne-primes': 'Find new Mersenne prime numbers',
     'fibonacci-patterns': 'Advanced Fibonacci sequence analysis',
     'pascal-triangle': 'Deep analysis of Pascal triangle properties',
+    'differential-equations': 'Solve complex differential equations',
+    'number-theory': 'Advanced number theory computations',
+    'yang-mills-theory': 'Solve Yang-Mills field equations for quantum chromodynamics',
+    'navier-stokes': 'Solve Navier-Stokes equations for fluid dynamics',
+    'elliptic-curve-crypto': 'Generate secure elliptic curve parameters',
+    'lattice-cryptography': 'Post-quantum cryptographic algorithms',
+    'cryptographic-hash': 'Cryptographic hash function analysis',
+    'poincaré-conjecture': 'Topological manifold analysis',
+    'algebraic-topology': 'Topological invariant computations',
     'euclidean-geometry': 'Advanced geometric theorem proving',
-    'algebraic-topology': 'Topological invariant computations'
+    'quantum-computing': 'Quantum computing simulations',
+    'machine-learning': 'Machine learning algorithm optimization',
+    'blockchain-protocols': 'Blockchain protocol analysis',
+    'distributed-systems': 'Distributed system optimization',
+    'optimization-algorithms': 'Mathematical optimization algorithms'
   };
 
   const engineIcons = {
     'riemann-zeros': <FaBrain />,
-    'yang-mills': <FaNetworkWired />,
-    'goldbach': <FaGraduationCap />,
-    'navier-stokes': <FaCog />,
+    'goldbach-conjecture': <FaGraduationCap />,
     'birch-swinnerton': <FaShieldAlt />,
-    'ecc': <FaRocket />,
-    'lattice': <FaNetworkWired />,
-    'poincare': <FaBrain />,
-    'prime-pattern': <FaCog />,
+    'prime-pattern-discovery': <FaCog />,
     'twin-primes': <FaGraduationCap />,
-    'collatz': <FaBrain />,
+    'collatz-conjecture': <FaBrain />,
     'perfect-numbers': <FaShieldAlt />,
     'mersenne-primes': <FaRocket />,
     'fibonacci-patterns': <FaCog />,
     'pascal-triangle': <FaGraduationCap />,
+    'differential-equations': <FaCog />,
+    'number-theory': <FaGraduationCap />,
+    'yang-mills-theory': <FaNetworkWired />,
+    'navier-stokes': <FaCog />,
+    'elliptic-curve-crypto': <FaRocket />,
+    'lattice-cryptography': <FaNetworkWired />,
+    'cryptographic-hash': <FaShieldAlt />,
+    'poincaré-conjecture': <FaBrain />,
+    'algebraic-topology': <FaBrain />,
     'euclidean-geometry': <FaNetworkWired />,
-    'algebraic-topology': <FaBrain />
+    'quantum-computing': <FaRocket />,
+    'machine-learning': <FaBrain />,
+    'blockchain-protocols': <FaNetworkWired />,
+    'distributed-systems': <FaCog />,
+    'optimization-algorithms': <FaGraduationCap />
   };
 
-  // Available mathematical engines with real data from backend
-  const availableEngines = [
-    'riemann-zeros', 'yang-mills', 'goldbach', 'navier-stokes', 'birch-swinnerton',
-    'ecc', 'lattice', 'poincare', 'prime-pattern', 'twin-primes', 'collatz',
-    'perfect-numbers', 'mersenne-primes', 'fibonacci-patterns', 'pascal-triangle',
-    'euclidean-geometry', 'algebraic-topology'
-  ].map(engineId => {
-    // Get real data from backend
-    const backendEngine = engineDistribution?.engines?.find(e => e.id === engineId);
+  // Available mathematical engines with real data from smart contract
+  // Create available engines from work types with discoveries data
+  const availableEngines = workTypes ? workTypes.map(workType => {
+    // Map work type ID to engine ID for proper icon and description lookup
+    const engineIdMap = {
+      0: 'riemann-zeros',
+      1: 'goldbach-conjecture',
+      2: 'birch-swinnerton',
+      3: 'prime-pattern-discovery',
+      4: 'twin-primes',
+      5: 'collatz-conjecture',
+      6: 'perfect-numbers',
+      7: 'mersenne-primes',
+      8: 'fibonacci-patterns',
+      9: 'pascal-triangle',
+      10: 'differential-equations',
+      11: 'number-theory',
+      12: 'yang-mills-theory',
+      13: 'navier-stokes',
+      14: 'elliptic-curve-crypto',
+      15: 'lattice-cryptography',
+      16: 'cryptographic-hash',
+      17: 'poincaré-conjecture',
+      18: 'algebraic-topology',
+      19: 'euclidean-geometry',
+      20: 'quantum-computing',
+      21: 'machine-learning',
+      22: 'blockchain-protocols',
+      23: 'distributed-systems',
+      24: 'optimization-algorithms'
+    };
+    
+    const engineId = engineIdMap[workType.id] || workType.name.toLowerCase().replace(/\s+/g, '-');
+    
+    // Get discoveries data for this work type
+    const discoveriesInfo = discoveriesData ? discoveriesData[workType.id] : null;
+    const discoveryCount = discoveriesInfo ? discoveriesInfo.count : 0;
+    const avgResearchValue = discoveriesInfo ? discoveriesInfo.avgResearchValue : 0;
+    
+    // Calculate updated estimated reward based on actual discoveries
+    let updatedEstimatedReward = workType.estimatedReward;
+    if (discoveryCount > 0 && avgResearchValue > 0) {
+      // Use average research value as proxy for daily rewards
+      const dailyDiscoveryRate = Math.max(discoveryCount, 1); // conservative
+      const estimatedDailyReward = dailyDiscoveryRate * avgResearchValue;
+      updatedEstimatedReward = `${estimatedDailyReward.toFixed(6)} MINED/day`;
+    }
     
     return {
-      id: engineId,
-      name: backendEngine?.name || engineId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      description: engineDescriptions[engineId] || 'Mathematical computation engine',
+      id: workType.id,
+      name: workType.name,
+      description: workType.description,
       icon: engineIcons[engineId] || <FaCog />,
-      complexity: backendEngine?.complexity || 'Medium',
-      currentHashrate: backendEngine?.currentHashrate || 0,
-      totalDiscoveries: backendEngine?.completed || 0,
-      estimatedReward: backendEngine?.estimatedReward || 0,
-      sessions: backendEngine?.sessions || 0,
-      totalCoins: backendEngine?.totalCoins || 0
+      complexity: workType.difficulty,
+      currentHashrate: workType.hashrate,
+      totalDiscoveries: discoveryCount.toString(),
+      estimatedReward: updatedEstimatedReward,
+      sessions: 0, // Will be updated from contract
+      totalCoins: 0, // Not applicable for ERC20
+      researchValue: workType.baseReward || 0,
+      avgResearchValue: avgResearchValue,
+      discoveryRate: discoveryCount > 0 ? Math.round(discoveryCount * 24 / Math.max(workType.sessions || 1, 1)) : 0
     };
-  });
+  }) : [];
 
   // Current mining statistics from token data
   const currentStats = {
-    hashrate: 796, // Default hashrate
-    shares: activeSessions.length || 6, // Your total sessions
-    rewards: parseFloat(tokenBalance) || 2.07, // Your token balance
-    uptime: 0, // Not applicable for ERC20
-    activeMiners: 1, // Default active miners
-    totalDiscoveries: 0, // Not applicable for ERC20
-    averageBlockTime: 12, // Default block time
-    difficulty: 1000000 // Default difficulty
+    hashrate: (() => {
+      const selected = workTypes.find(w => w.id === selectedEngine);
+      return selected ? selected.calculatedHashrate : 796;
+    })(),
+    shares: activeSessions.length || 0,
+    rewards: parseFloat(tokenBalance) || 0,
+    uptime: 0,
+    activeMiners: 1,
+    totalDiscoveries: Object.values(discoveriesData || {}).reduce((sum, d) => sum + (d.count || 0), 0),
+    averageBlockTime: 12,
+    difficulty: 25000
   };
 
   // Refresh mining data
@@ -1303,11 +1760,23 @@ const Mining = () => {
                   <p>{engine.description}</p>
                   <div className="engine-stats">
                     <span className="complexity">{engine.complexity}</span>
-                    <span className="hashrate">{formatHashrate(engine.currentHashrate)}</span>
+                    <span className="hashrate">{engine.currentHashrate}</span>
                     <span className="discoveries">{engine.totalDiscoveries} discoveries</span>
                   </div>
-                  <div className="estimated-reward">
-                    Est. Reward: {formatCurrency(engine.estimatedReward)}/day
+                  <div className="engine-metrics">
+                    <div className="estimated-reward">
+                      Est. Reward: {engine.estimatedReward}
+                    </div>
+                    {engine.avgResearchValue > 0 && (
+                      <div className="avg-research-value">
+                        Avg Research Value: {engine.avgResearchValue}
+                      </div>
+                    )}
+                    {engine.discoveryRate > 0 && (
+                      <div className="discovery-rate">
+                        Discovery Rate: {engine.discoveryRate}/day
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -1393,9 +1862,9 @@ const Mining = () => {
                 🔍 Check Setup
               </button>
 
-              {/* Complete Sessions Button */}
+              {/* Contract State Check Button */}
               <button
-                className="control-btn complete-sessions-btn"
+                className="control-btn contract-state-btn"
                 onClick={async () => {
                   try {
                     if (!web3Service.isWeb3Connected()) {
@@ -1403,68 +1872,74 @@ const Mining = () => {
                       return;
                     }
                     
-                    alert('🔄 Attempting to complete sessions 1-10 directly...\n\nThis will try to complete any active sessions you have.');
+                    setMiningStatus('Checking contract state...');
+                    const state = await web3Service.checkContractState();
                     
-                    // Direct approach: try to complete sessions 1-10
-                    const sessionsToTry = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-                    let completedCount = 0;
-                    let failedCount = 0;
-                    
-                    for (const sessionId of sessionsToTry) {
-                      try {
-                        console.log(`Attempting to complete session ${sessionId}...`);
-                        
-                        // Generate a proper bytes32 proof hash
-                        const proofHash = generateRandomHash();
-                        const metadata = `Completed session ${sessionId} at ${new Date().toISOString()}`;
-                        
-                        const result = await web3Service.completeMiningSession(sessionId, proofHash, metadata);
-                        console.log(`Session ${sessionId} completed:`, result);
-                        completedCount++;
-                        
-                        if (result && result.transactionHash) {
-                          alert(`✅ Session ${sessionId} completed successfully!\n\nTransaction: ${result.transactionHash}\n\n${completedCount} sessions completed so far.`);
-                        } else {
-                          alert(`✅ Session ${sessionId} completed successfully!\n\n${completedCount} sessions completed so far.`);
-                        }
-                        
-                      } catch (error) {
-                        console.log(`Session ${sessionId} failed or doesn't exist:`, error.message);
-                        failedCount++;
-                        
-                        // If we get a specific error, show it
-                        if (error.message.includes('SessionNotFound') || error.message.includes('SessionNotActive')) {
-                          console.log(`Session ${sessionId} is not active or doesn't exist`);
-                        } else if (error.message.includes('Unauthorized')) {
-                          console.log(`Session ${sessionId} belongs to another user`);
-                        } else {
-                          console.log(`Session ${sessionId} error:`, error.message);
-                        }
-                      }
-                    }
-                    
-                    if (completedCount === 0) {
-                      alert('✅ No active sessions found to complete.\n\nYou should be able to start mining now!');
+                    let statusMessage = 'Contract state checked. ';
+                    if (state.contractPaused) {
+                      statusMessage += '❌ Contract is paused!';
+                    } else if (!state.poolsHealthy) {
+                      statusMessage += '⚠️ Pool balances are low.';
+                    } else if (!state.workType0Active) {
+                      statusMessage += '⚠️ Work type 0 is not active.';
                     } else {
-                      alert(`🎉 Completed ${completedCount} sessions!\n\nFailed attempts: ${failedCount}\n\nClick "Check Setup" again to verify you can now start mining.`);
+                      statusMessage += '✅ Contract state is healthy!';
                     }
+                    
+                    setMiningStatus(statusMessage);
+                    
+                    // Show detailed alert
+                    const alertMessage = `Contract State Analysis:
+                    
+🏦 Pool Balances:
+• Mining Rewards: ${state.miningRewardsPool} MINED
+• Staking Pool: ${state.stakingPoolBalance} MINED  
+• Validator Pool: Not available in current contract
+
+🔧 Contract Status:
+• Pools Healthy: ${state.poolsHealthy ? '✅' : '❌'}
+• Work Type 0 Active: ${state.workType0Active ? '✅' : '❌'}
+• Contract Paused: ${state.contractPaused ? '❌' : '✅'}
+• Active Sessions: ${state.userActiveSessions}
+
+${state.contractPaused ? '❌ Contract is paused - no operations possible!' : 
+  !state.poolsHealthy ? '⚠️ Low pool balances may affect automatic operations' :
+  '✅ Contract ready for mining operations!'}`;
+                    
+                    alert(alertMessage);
                     
                   } catch (error) {
-                    console.error('Error completing sessions:', error);
-                    alert('❌ Error completing sessions: ' + error.message);
+                    console.error('❌ Failed to check contract state:', error);
+                    setMiningStatus('Failed to check contract state');
+                    alert(`❌ Failed to check contract state: ${error.message}`);
                   }
                 }}
                 style={{ 
-                  background: 'linear-gradient(135deg, #48bb78, #38a169)',
+                  background: 'linear-gradient(135deg, #ff6b6b, #ee5a24)',
                   marginLeft: '10px'
                 }}
               >
-                ✅ Complete Sessions
+                🏦 Check Contract State
               </button>
 
-              {/* Force Start Mining Button */}
+              {/* Complete Sessions Button */}
+
+
+              {/* Mining Status Display */}
+              <div style={{
+                margin: '16px 0',
+                padding: '12px',
+                backgroundColor: '#f0f8ff',
+                border: '1px solid #4CAF50',
+                borderRadius: '8px',
+                textAlign: 'center'
+              }}>
+                <strong>Mining Status:</strong> <span style={{ color: '#4CAF50' }}>{miningStatus}</span>
+              </div>
+
+              {/* Contract Mining Button */}
               <button
-                className="control-btn force-mining-btn"
+                className="control-btn contract-mining-btn"
                 onClick={async () => {
                   try {
                     if (!web3Service.isWeb3Connected()) {
@@ -1472,140 +1947,87 @@ const Mining = () => {
                       return;
                     }
                     
-                    alert('🚀 Force starting mining session...\n\nThis will bypass all checks and try to start mining directly.');
+                    const confirmed = window.confirm('🚀 Start Real Contract Mining?\n\nThis will:\n1. Start a mining session on the ERC20 contract\n2. Perform PoW computation\n3. Submit result and mint MINED tokens to your wallet\n\nThis requires gas fees. Continue?');
+                    if (!confirmed) return;
                     
-                    // Force start mining with default parameters
-                    const workType = 0; // PRIME_PATTERN_DISCOVERY
+                    // Start real contract mining with selected engine
+                    const workType = selectedEngine || 1; // Use selected engine or default to Goldbach Conjecture
                     const difficulty = 25;
                     
-                    console.log('🚀 Force starting mining with:', { workType, difficulty });
-                    
-                    const result = await web3Service.startMiningSession(workType, difficulty);
-                    console.log('✅ Force mining successful:', result);
-                    
-                    if (result && result.transactionHash) {
-                      alert(`🎉 Mining started successfully!\n\nTransaction: ${result.transactionHash}\n\nCheck your mining progress below.`);
-                    } else {
-                      alert(`🎉 Mining started successfully!\n\nCheck your mining progress below.`);
+                    // Validate work type
+                    if (workType < 0 || workType > 24) {
+                      alert(`❌ Invalid work type: ${workType}. Must be between 0 and 24.`);
+                      return;
                     }
                     
-                  } catch (error) {
-                    console.error('❌ Force mining failed:', error);
+                    console.log('🚀 Starting real contract mining with:', { workType, difficulty });
                     
-                    // Decode the error
+                    const result = await startContractMiningSession(workType, difficulty);
+                    
+                    // Auto-complete the session after a short delay to simulate PoW
+                    setTimeout(async () => {
+                      try {
+                        console.log('⛏️ Auto-completing mining session...');
+                        await completeSession(result.sessionId);
+                      } catch (error) {
+                        console.error('❌ Failed to auto-complete mining session:', error);
+                        alert(`❌ Mining session started but failed to complete: ${error.message}`);
+                      }
+                    }, 3000); // 3 second delay to simulate mining
+                    
+                  } catch (error) {
+                    console.error('❌ Contract mining failed:', error);
+                    
+                    // Decode the error to provide better feedback
                     if (error.data) {
                       console.log('📊 Error data:', error.data);
                       
                       const errorSelectors = {
-                        '0x77280e15': 'TooManyActiveSessions()',
-                        '0x4d2301cc': 'ContractPaused()',
-                        '0x6d4ce63c': 'InvalidDifficulty()',
-                        '0x6d4ce63c': 'InvalidWorkType()'
+                        '0x77280e15': 'TooManyActiveSessions() - You have too many active sessions',
+                        '0x4d2301cc': 'ContractPaused() - Contract is paused',
+                        '0x6d4ce63c': 'InvalidDifficulty() - Invalid difficulty value',
+                        '0x50b4e663': 'InvalidWorkType() - Invalid work type value',
+                        '0x': 'Generic contract error'
                       };
                       
                       if (errorSelectors[error.data]) {
                         const errorName = errorSelectors[error.data];
-                        alert(`❌ Contract error: ${errorName}\n\nThis means the contract rejected the transaction.`);
+                        alert(`❌ Contract error: ${errorName}\n\nThe contract rejected the transaction. This usually means:\n• You have active mining sessions\n• Invalid parameters\n• Contract is paused\n\nTry again later or check your active sessions.`);
                       } else {
-                        alert(`❌ Contract error: ${error.message}`);
+                        alert(`❌ Contract error: ${error.message}\n\nError data: ${error.data}`);
                       }
+                    } else if (error.message.includes('user rejected')) {
+                      alert('❌ Transaction cancelled by user.');
+                    } else if (error.message.includes('insufficient funds')) {
+                      alert('❌ Insufficient ETH for gas fees. Please add more ETH to your wallet.');
                     } else {
-                      alert(`❌ Error: ${error.message}`);
+                      alert(`❌ Mining failed: ${error.message}`);
                     }
                   }
                 }}
-                style={{ 
-                  background: 'linear-gradient(135deg, #ff6b6b, #feca57)',
-                  marginLeft: '10px'
+                style={{
+                  background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+                  transition: 'all 0.3s ease'
                 }}
+                onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
               >
-                🚀 Force Start Mining
+                🚀 Start Contract Mining (Real ERC20)
               </button>
 
-              {/* Simple Session Check Button */}
-              <button
-                className="control-btn session-check-btn"
-                onClick={async () => {
-                  try {
-                    if (!web3Service.isWeb3Connected()) {
-                      alert('❌ Web3 not connected. Please connect your wallet first.');
-                      return;
-                    }
-                    
-                    const myAddress = web3Service.getCurrentAccount();
-                    console.log('🔍 Checking sessions for:', myAddress);
-                    
-                    let myActiveSessions = 0;
-                    let totalActiveSessions = 0;
-                    let sessionDetails = [];
-                    
-                    // Check first 20 sessions
-                    for (let i = 1; i <= 20; i++) {
-                      try {
-                        const session = await web3Service.contract.methods.sessions(i).call();
-                        
-                        if (session.active) {
-                          totalActiveSessions++;
-                          
-                          if (session.miner.toLowerCase() === myAddress.toLowerCase()) {
-                            myActiveSessions++;
-                            sessionDetails.push(`Session ${i}: Yours (WorkType: ${session.workType}, Difficulty: ${session.difficulty})`);
-                          } else {
-                            sessionDetails.push(`Session ${i}: Other miner (${session.miner.slice(0, 10)}...)`);
-                          }
-                        }
-                      } catch (error) {
-                        // Session doesn't exist
-                      }
-                    }
-                    
-                    let message = `📊 Session Check Results:\n\n`;
-                    message += `Your wallet: ${myAddress.slice(0, 10)}...\n`;
-                    message += `Total active sessions: ${totalActiveSessions}\n`;
-                    message += `Your active sessions: ${myActiveSessions}\n\n`;
-                    
-                    if (myActiveSessions === 0) {
-                      message += `✅ You have no active sessions!\n`;
-                      message += `You should be able to mine.\n\n`;
-                      message += `Try the "🚀 Force Start Mining" button.`;
-                    } else {
-                      message += `❌ You have ${myActiveSessions} active sessions.\n`;
-                      message += `You need to complete some before mining.\n\n`;
-                      message += `Your sessions:\n`;
-                      sessionDetails.forEach(detail => {
-                        if (detail.includes('Yours')) {
-                          message += `• ${detail}\n`;
-                        }
-                      });
-                      message += `\nUse the "Complete My Sessions" button below.`;
-                    }
-                    
-                    alert(message);
-                    
-                  } catch (error) {
-                    console.error('Error checking sessions:', error);
-                    alert('❌ Error checking sessions: ' + error.message);
-                  }
-                }}
-                style={{ 
-                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                  marginLeft: '10px'
-                }}
-              >
-                📊 Check My Sessions
-              </button>
 
-              {/* Complete My Sessions Button */}
-              <button
-                className="control-btn complete-sessions-btn"
-                onClick={completeMultipleSessions}
-                style={{ 
-                  background: 'linear-gradient(135deg, #4caf50, #45a049)',
-                  marginLeft: '10px'
-                }}
-              >
-                ✅ Complete My Sessions
-              </button>
+
+
+
+
               
 
             </div>

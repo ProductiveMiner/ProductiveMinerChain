@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  productiveminer-secure:
+    build:
+      context: .
+      dockerfile: Dockerfile.secure
+    container_name: productiveminer-secure-deploy
+    environment:
+      - NODE_ENV=production
+      - NETWORK=${NETWORK:-localhost}
+    env_file:
+      - .env
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./cache:/app/cache
+    networks:
+      - productiveminer-network
+
+  # Optional: Local Hardhat node for testing
+  hardhat-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: productiveminer-hardhat-node
+    ports:
+      - "8545:8545"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - productiveminer-network
+    profiles:
+      - local-testing
+
+networks:
+  productiveminer-network:
+    driver: bridge

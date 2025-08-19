@@ -4,8 +4,13 @@ const { query } = require('../database/connection');
 const { asyncHandler, ValidationError, NotFoundError } = require('../middleware/errorHandler');
 const { requireAdmin } = require('../middleware/auth');
 const winston = require('winston');
+const path = require('path');
 
 const router = express.Router();
+
+// Use relative path for logs in development, absolute path in production
+const logDir = process.env.NODE_ENV === 'production' ? '/app/logs' : './logs';
+const usersLogPath = path.join(logDir, 'users.log');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -14,7 +19,7 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ filename: '/app/logs/users.log' })
+    new winston.transports.File({ filename: usersLogPath })
   ]
 });
 

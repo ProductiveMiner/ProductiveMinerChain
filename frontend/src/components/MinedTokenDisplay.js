@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { MINED_TOKEN_CONFIG } from '../config/mined-token-config';
-import MINEDTokenStandaloneABI from '../contracts/MINEDTokenStandalone.json';
+import MINEDTokenABI from '../contracts/MINEDToken.json';
 import './MinedTokenDisplay.css';
 
 const MinedTokenDisplay = ({ userAddress }) => {
@@ -27,16 +27,15 @@ const MinedTokenDisplay = ({ userAddress }) => {
         throw new Error('MetaMask is not installed');
       }
 
-      // Connect to provider - try BrowserProvider first, fallback to JsonRpcProvider
+      // Connect to provider - use JsonRpcProvider directly for reliability
       let provider;
       try {
-        provider = new ethers.BrowserProvider(window.ethereum);
-        console.log('Using BrowserProvider');
-      } catch (providerError) {
-        console.warn('BrowserProvider failed, using JsonRpcProvider:', providerError);
-        // Fallback to direct RPC provider
+        // Use JsonRpcProvider directly to avoid MetaMask connection issues
         provider = new ethers.JsonRpcProvider('https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC');
-        console.log('Using JsonRpcProvider fallback');
+        console.log('Using JsonRpcProvider for reliable connection');
+      } catch (providerError) {
+        console.error('JsonRpcProvider failed:', providerError);
+        throw new Error(`Failed to connect to Sepolia network: ${providerError.message}`);
       }
       
       // Get the correct network
@@ -54,7 +53,7 @@ const MinedTokenDisplay = ({ userAddress }) => {
       // Create contract instance with better error handling
       const contractAddress = MINED_TOKEN_CONFIG.contracts.minedToken;
       console.log('Creating contract instance with address:', contractAddress);
-      console.log('ABI length:', MINEDTokenStandaloneABI.abi.length);
+              console.log('ABI length:', MINEDTokenABI.abi.length);
       
       // Verify the contract address is valid
       if (!ethers.isAddress(contractAddress)) {
@@ -63,7 +62,7 @@ const MinedTokenDisplay = ({ userAddress }) => {
       
       const minedTokenContract = new ethers.Contract(
         contractAddress,
-        MINEDTokenStandaloneABI.abi,
+        MINEDTokenABI.abi,
         provider
       );
       
@@ -71,11 +70,23 @@ const MinedTokenDisplay = ({ userAddress }) => {
 
       // Check if contract has code deployed
       console.log('Checking if contract has code deployed...');
-      const code = await provider.getCode(contractAddress);
-      if (code === '0x') {
-        throw new Error(`No contract deployed at address: ${contractAddress}`);
+      console.log('Provider type:', provider.constructor.name);
+      console.log('Contract address:', contractAddress);
+      
+      try {
+        const code = await provider.getCode(contractAddress);
+        console.log('Contract code result:', code);
+        console.log('Code length:', code.length);
+        console.log('Code starts with 0x:', code.startsWith('0x'));
+        
+        if (code === '0x' || code === '0x0') {
+          throw new Error(`No contract deployed at address: ${contractAddress}`);
+        }
+        console.log('✅ Contract code found at address');
+      } catch (codeError) {
+        console.error('Error getting contract code:', codeError);
+        throw new Error(`Failed to verify contract deployment: ${codeError.message}`);
       }
-      console.log('✅ Contract code found at address');
 
       // Test basic contract functions first
       console.log('Testing basic contract functions...');
@@ -105,15 +116,20 @@ const MinedTokenDisplay = ({ userAddress }) => {
         const decimals = await minedTokenContract.decimals();
         const totalSupply = await minedTokenContract.totalSupply();
         
-        // Get system info from standalone token (returns tuple: totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission)
-        const systemInfo = await minedTokenContract.getSystemInfo();
-        console.log('Raw systemInfo result:', systemInfo);
+        // Get system info from asymptotic data
+        const asymptoticData = await minedTokenContract.getAsymptoticData();
+        console.log('Raw asymptotic data result:', asymptoticData);
         
-        // systemInfo is a tuple, access by index: [totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission]
-        const [systemTotalSupply, totalBurned, totalResearchValue, totalValidators, currentEmission] = systemInfo;
+        // asymptoticData returns: (currentSupply, totalEmission, totalBurned, asymptoticSupply, lastEmissionBlockNumber)
+        const [currentSupply, totalEmission, totalBurned, asymptoticSupply, lastEmissionBlockNumber] = asymptoticData;
+        
+        // For now, set placeholder values for missing data
+        const totalResearchValue = 0; // TODO: Add research value tracking
+        const totalValidators = 0; // TODO: Add validator tracking
+        const currentEmission = 0; // Placeholder
         
         console.log('Parsed system info:', {
-          totalSupply: systemTotalSupply.toString(),
+          totalSupply: totalSupply.toString(),
           totalBurned: totalBurned.toString(),
           totalResearchValue: totalResearchValue.toString(),
           totalValidators: totalValidators.toString(),
@@ -124,55 +140,33 @@ const MinedTokenDisplay = ({ userAddress }) => {
           name: name,
           symbol: symbol,
           decimals: Number(decimals),
-          totalSupply: ethers.formatEther(systemTotalSupply.toString()),
+          totalSupply: ethers.formatEther(totalSupply.toString()),
           totalBurned: ethers.formatEther(totalBurned.toString()),
           totalResearchValue: totalResearchValue.toString(),
           totalValidators: totalValidators.toString(),
           currentEmission: ethers.formatEther(currentEmission.toString()),
-          softCap: ethers.formatEther(systemTotalSupply.toString()) // Use total supply as soft cap
+          softCap: ethers.formatEther(totalSupply.toString()) // Use total supply as soft cap
         });
         
-        // Get totalEmitted from calculateEmission (standalone contract doesn't have separate emission parameters)
-        try {
-          const currentEmission = await minedTokenContract.calculateEmission();
-          setTokenInfo(prev => ({
-            ...prev,
-            totalEmitted: ethers.formatEther(currentEmission.toString())
-          }));
-        } catch (emissionError) {
-          console.warn('calculateEmission not available, using totalSupply as fallback:', emissionError.message);
-          setTokenInfo(prev => ({
-            ...prev,
-            totalEmitted: ethers.formatEther(systemTotalSupply.toString())
-          }));
-        }
+        // Set totalEmitted to totalSupply for standalone contract (no separate emission tracking)
+        setTokenInfo(prev => ({
+          ...prev,
+          totalEmitted: ethers.formatEther(totalSupply.toString())
+        }));
       } catch (infoError) {
-        console.error('getSystemInfo error:', infoError);
+        console.error('getAsymptoticData() error:', infoError);
         throw new Error(`Failed to get token info: ${infoError.message}`);
       }
 
-      // Get emission parameters from calculateEmission (standalone contract doesn't have separate emission parameters)
-      console.log('Getting emission data from calculateEmission...');
-      try {
-        const currentEmission = await minedTokenContract.calculateEmission();
-        console.log('Current emission result:', currentEmission);
-        setEmissionParams({
-          initialEmissionRate: ethers.formatEther(currentEmission.toString()),
-          decayConstant: '1', // Default for standalone contract
-          researchMultiplierBase: '1', // Default for standalone contract
-          decayScale: '10000', // Default for standalone contract
-          researchScale: '100' // Default for standalone contract
-        });
-      } catch (emissionError) {
-        console.warn('calculateEmission not available, using defaults:', emissionError.message);
-        setEmissionParams({
-          initialEmissionRate: '1000',
-          decayConstant: '1',
-          researchMultiplierBase: '1',
-          decayScale: '10000',
-          researchScale: '100'
-        });
-      }
+      // Set emission parameters for standalone contract (fixed values)
+      console.log('Setting emission data for standalone contract...');
+      setEmissionParams({
+        initialEmissionRate: '1000',
+        decayConstant: '1',
+        researchMultiplierBase: '1',
+        decayScale: '10000',
+        researchScale: '100'
+      });
 
     } catch (err) {
       console.error('Error loading token data:', err);

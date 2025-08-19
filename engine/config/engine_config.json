@@ -1,0 +1,126 @@
+{
+  "engine": {
+    "name": "ProductiveMiner Mathematical Engine",
+    "version": "2.0.0",
+    "description": "Advanced mathematical computation engine for blockchain mining",
+    "supported_types": [
+      "prime_pattern",
+      "riemann_zero", 
+      "yang_mills",
+      "goldbach",
+      "navier_stokes",
+      "birch_swinnerton",
+      "ecc",
+      "lattice",
+      "poincare"
+    ]
+  },
+  "computation_settings": {
+    "default_difficulty": 25,
+    "max_difficulty": 100,
+    "min_difficulty": 1,
+    "accuracy_threshold": 99.5,
+    "research_value_multiplier": 1.0,
+    "max_computation_time": 300,
+    "max_memory_usage": "2GB"
+  },
+  "mathematical_types": {
+    "prime_pattern": {
+      "description": "Prime number pattern detection",
+      "difficulty_range": [1, 50],
+      "computation_complexity": "O(n log log n)",
+      "research_value_base": 10,
+      "accuracy_curve": "exponential",
+      "enabled": true
+    },
+    "riemann_zero": {
+      "description": "Riemann zeta function zero finding",
+      "difficulty_range": [5, 100],
+      "computation_complexity": "O(n^2)",
+      "research_value_base": 15,
+      "accuracy_curve": "logarithmic",
+      "enabled": true
+    },
+    "yang_mills": {
+      "description": "Yang-Mills equation solving",
+      "difficulty_range": [10, 80],
+      "computation_complexity": "O(n^3)",
+      "research_value_base": 12,
+      "accuracy_curve": "linear",
+      "enabled": true
+    },
+    "goldbach": {
+      "description": "Goldbach conjecture verification",
+      "difficulty_range": [1, 40],
+      "computation_complexity": "O(n^2)",
+      "research_value_base": 8,
+      "accuracy_curve": "exponential",
+      "enabled": true
+    },
+    "navier_stokes": {
+      "description": "Navier-Stokes equation solving",
+      "difficulty_range": [15, 90],
+      "computation_complexity": "O(n^4)",
+      "research_value_base": 14,
+      "accuracy_curve": "polynomial",
+      "enabled": true
+    },
+    "birch_swinnerton": {
+      "description": "Birch-Swinnerton-Dyer conjecture",
+      "difficulty_range": [8, 70],
+      "computation_complexity": "O(n^2.5)",
+      "research_value_base": 11,
+      "accuracy_curve": "logarithmic",
+      "enabled": true
+    },
+    "ecc": {
+      "description": "Elliptic Curve Cryptography",
+      "difficulty_range": [5, 60],
+      "computation_complexity": "O(n log n)",
+      "research_value_base": 13,
+      "accuracy_curve": "exponential",
+      "enabled": true
+    },
+    "lattice": {
+      "description": "Lattice-based cryptographic problems",
+      "difficulty_range": [12, 75],
+      "computation_complexity": "O(n^3)",
+      "research_value_base": 9,
+      "accuracy_curve": "linear",
+      "enabled": true
+    },
+    "poincare": {
+      "description": "Poincaré conjecture related problems",
+      "difficulty_range": [20, 100],
+      "computation_complexity": "O(n^4)",
+      "research_value_base": 16,
+      "accuracy_curve": "polynomial",
+      "enabled": true
+    }
+  },
+  "performance": {
+    "max_concurrent_computations": 10,
+    "memory_limit_mb": 2048,
+    "cpu_limit_percent": 80,
+    "timeout_seconds": 300,
+    "retry_attempts": 3
+  },
+  "logging": {
+    "level": "INFO",
+    "file_path": "/app/logs/engine.log",
+    "max_file_size_mb": 100,
+    "backup_count": 5
+  },
+  "security": {
+    "input_validation": true,
+    "rate_limiting": true,
+    "max_request_size_mb": 10,
+    "allowed_origins": ["*"]
+  },
+  "monitoring": {
+    "metrics_enabled": true,
+    "health_check_interval": 30,
+    "performance_metrics": true,
+    "error_tracking": true
+  }
+}

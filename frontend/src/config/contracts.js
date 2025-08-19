@@ -8,7 +8,7 @@ const CONTRACT_CONFIG = {
     SEPOLIA: {
       chainId: 11155111,
       name: 'Sepolia Testnet',
-      rpcUrl: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Live Alchemy RPC URL
+      rpcUrl: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Alchemy RPC URL
       explorerUrl: 'https://sepolia.etherscan.io',
       nativeCurrency: {
         name: 'Sepolia Ether',
@@ -38,22 +38,31 @@ const CONTRACT_CONFIG = {
   MINED_TOKEN: {
     name: 'MINED',
     symbol: 'MINED',
-    address: '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3', // Standalone MINED Token address
+    address: '0x7877EFAb4aD3610792a135f6f8A241962fD2ab76', // MINEDToken.sol contract
     decimals: 18,
-    totalSupply: '1100000000000000000000000000', // 1.1 billion tokens in wei (includes all pools)
+    totalSupply: '1000000000000000000000000000', // 1 billion tokens initial supply
     initialSupply: '1000000000000000000000000000', // 1 billion initial supply
-    asymptoticTarget: '1500000000000000000000000000', // 1.5 billion asymptotic target
     network: 'SEPOLIA',
-    status: 'deployed_standalone_erc20_only',
+    status: 'deployed_verified_tokenomics_fixed',
+    contractFeatures: {
+      hybridPowPos: true,
+      automaticRewards: true,
+      stakingPool: true,
+      validatorRewards: true,
+      discoverySystem: true,
+      workTypes: 25, // 0-24 work types
+      maxWorkType: 24
+    },
     tokenomics: {
-      model: 'asymptotic',
-      equation: 'S(t) = S₀ + Σ(E(t) - B(t))',
-      emission: 'E(t) = E₀ × e^(-λt) × (1 + α × ResearchValue(t))',
+      model: 'hybrid_pow_pos',
+      powRewards: true,
+      posStaking: true,
+      automaticValidation: true,
       deflationary: true,
       researchBurns: true,
       multiChainReady: true
     },
-    etherscanUrl: 'https://sepolia.etherscan.io/address/0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3#code'
+    etherscanUrl: 'https://sepolia.etherscan.io/address/0x7877EFAb4aD3610792a135f6f8A241962fD2ab76#code'
   },
 
   // Web3 Provider Configuration
@@ -64,7 +73,7 @@ const CONTRACT_CONFIG = {
     
     // RPC URLs for different networks
     rpcUrls: {
-      11155111: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Live Alchemy RPC URL
+      11155111: 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC', // Alchemy RPC URL
       1337: 'http://localhost:8545'
     },
     

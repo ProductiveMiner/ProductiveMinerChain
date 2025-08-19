@@ -74,12 +74,21 @@
   background-clip: text;
 }
 
-.block-details {
+.block-details,
+.discovery-details {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 15px;
   padding: 20px;
   margin-bottom: 25px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.discovery-title {
+  color: #ffd700;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  text-align: center;
+  font-weight: 600;
 }
 
 .detail-row {

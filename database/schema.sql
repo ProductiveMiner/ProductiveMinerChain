@@ -237,3 +237,6 @@ CREATE TRIGGER update_discoveries_updated_at BEFORE UPDATE ON mathematical_disco
 
 CREATE TRIGGER update_papers_updated_at BEFORE UPDATE ON research_papers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- MINED Token Contract
+INSERT INTO contracts (address, name, network, created_at) VALUES ('0x7877EFAb4aD3610792a135f6f8A241962fD2ab76', 'MINEDToken', 'sepolia', NOW());

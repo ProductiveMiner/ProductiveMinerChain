@@ -19,6 +19,9 @@ RUN npm install --omit=dev
 # Copy application code
 COPY . .
 
+# Rebuild native modules for the target platform
+RUN npm rebuild bcrypt --build-from-source
+
 # Create necessary directories
 RUN mkdir -p /app/logs /app/data
 

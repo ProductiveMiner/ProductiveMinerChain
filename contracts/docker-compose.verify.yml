@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  contract-verify:
+    build:
+      context: .
+      dockerfile: Dockerfile.verify
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./cache:/app/cache
+    restart: "no"
+    stdin_open: true
+    tty: true

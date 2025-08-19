@@ -1,0 +1,44 @@
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache git python3 make g++ curl
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies with legacy peer deps to avoid conflicts
+RUN npm install --legacy-peer-deps
+
+# Copy contract source files
+COPY . .
+
+# Create artifacts directory
+RUN mkdir -p artifacts
+
+# Compile contracts
+RUN npx hardhat compile
+
+# Set environment variables
+ENV NODE_ENV=production
+
+# Create deployment script
+RUN echo '#!/bin/sh' > /app/deploy-and-verify.sh && \
+    echo 'echo "🚀 Deploying ProductiveMiner contract to Sepolia..."' >> /app/deploy-and-verify.sh && \
+    echo '' >> /app/deploy-and-verify.sh && \
+    echo '# Deploy the contract' >> /app/deploy-and-verify.sh && \
+    echo 'npx hardhat run scripts/deploy.js --network testnet' >> /app/deploy-and-verify.sh && \
+    echo '' >> /app/deploy-and-verify.sh && \
+    echo 'echo "✅ Contract deployed successfully!"' >> /app/deploy-and-verify.sh && \
+    echo 'echo "🔍 Now you can verify on Etherscan with these settings:"' >> /app/deploy-and-verify.sh && \
+    echo 'echo "   - Compiler Version: 0.8.20+commit.a1b79de6"' >> /app/deploy-and-verify.sh && \
+    echo 'echo "   - Optimization: Yes"' >> /app/deploy-and-verify.sh && \
+    echo 'echo "   - Runs: 200"' >> /app/deploy-and-verify.sh && \
+    echo 'echo "   - Via IR: No"' >> /app/deploy-and-verify.sh && \
+    echo 'echo "   - Constructor Arguments: 0000000000000000000000000000000000000000"' >> /app/deploy-and-verify.sh && \
+    chmod +x /app/deploy-and-verify.sh
+
+# Default command - run deployment and verification
+CMD ["/app/deploy-and-verify.sh"]

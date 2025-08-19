@@ -1711,3 +1711,256 @@
   color: #7f8c8d;
   font-size: 0.8em;
 }
+
+/* Real PoS Data Styling for Explorer */
+.real-pos-stats {
+  background: rgba(76, 175, 80, 0.1);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.real-pos-stats h4 {
+  color: #4caf50;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.real-pos-stats h4::before {
+  content: '🔄 ';
+  margin-right: 0.5rem;
+}
+
+.validated-block {
+  background: rgba(76, 175, 80, 0.1);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.validated-block::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4caf50, #45a049);
+}
+
+.pow-block {
+  background: rgba(255, 165, 0, 0.1);
+  border: 2px solid rgba(255, 165, 0, 0.3);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.pow-block::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ffa500, #ff8c00);
+}
+
+.pos-block {
+  background: rgba(102, 126, 234, 0.1);
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.pos-block::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea, #5a6fd8);
+}
+
+.block-type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.block-type-badge.pow {
+  background: linear-gradient(135deg, #ffa500, #ff8c00);
+  color: white;
+}
+
+.block-type-badge.pos {
+  background: linear-gradient(135deg, #667eea, #5a6fd8);
+  color: white;
+}
+
+.block-type-badge.validated {
+  background: linear-gradient(135deg, #4caf50, #45a049);
+  color: white;
+}
+
+/* Real-time activity indicators */
+.activity-item.real-time {
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  border-radius: 12px;
+  position: relative;
+}
+
+.activity-item.real-time::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #4caf50, #45a049);
+  border-radius: 2px 0 0 2px;
+}
+
+.activity-value.real {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.activity-value.real::before {
+  content: '💰 ';
+  margin-right: 0.25rem;
+}
+
+/* Enhanced network stats for real data */
+.network-stats-real {
+  background: rgba(76, 175, 80, 0.1);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.network-stats-real h3 {
+  color: #4caf50;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.network-stats-real h3::before {
+  content: '🌐 ';
+  margin-right: 0.5rem;
+}
+
+.stats-grid-real {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card-real {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat-card-real h4 {
+  color: #4caf50;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card-real p {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Real-time health indicators */
+.health-card.real-time {
+  background: rgba(76, 175, 80, 0.1);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.health-card.real-time::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4caf50, #45a049);
+}
+
+.health-card.real-time .health-value {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+/* Enhanced block display for real data */
+.block-card-real {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.block-card-real:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.block-card-real.validated {
+  background: rgba(76, 175, 80, 0.1);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+}
+
+.block-card-real.pow {
+  background: rgba(255, 165, 0, 0.1);
+  border: 2px solid rgba(255, 165, 0, 0.3);
+}
+
+.block-card-real.pos {
+  background: rgba(102, 126, 234, 0.1);
+  border: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+/* Real-time update pulse animation */
+.real-time-pulse {
+  animation: realTimePulse 2s infinite;
+}
+
+@keyframes realTimePulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

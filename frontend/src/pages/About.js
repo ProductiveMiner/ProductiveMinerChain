@@ -40,22 +40,40 @@ const About = () => {
       icon: <FaCog />
     },
     {
-      year: 2024,
-      title: "TestNet Launch",
-      description: "Deployment of ProductiveMiner TestNet with initial validators and miners",
+      year: 2025,
+      title: "Smart Contract Development",
+      description: "Development and deployment of MINEDToken contract with staking and validation mechanisms",
       icon: <FaNetworkWired />
     },
     {
-      year: 2024,
-      title: "Research Repository",
-      description: "Launch of mathematical discoveries repository and research collaboration platform",
+      year: 2025,
+      title: "Sepolia TestNet Launch",
+      description: "Deployment of ProductiveMiner on Sepolia TestNet with 25 mathematical problem types",
       icon: <FaBrain />
     },
     {
-      year: 2024,
+      year: 2025,
+      title: "Aurora Database Integration",
+      description: "Implementation of Aurora RDS database for blockchain event storage and research data",
+      icon: <FaGraduationCap />
+    },
+    {
+      year: 2025,
+      title: "Frontend Platform Launch",
+      description: "Launch of comprehensive web platform with mining, staking, and research capabilities",
+      icon: <FaRocket />
+    },
+    {
+      year: 2025,
+      title: "Research Repository",
+      description: "Implementation of mathematical discoveries repository with 41+ discoveries recorded",
+      icon: <FaStar />
+    },
+    {
+      year: "Anticipated Fall 2025",
       title: "MainNet Preparation",
       description: "Final preparations for ProductiveMiner MainNet launch with full ecosystem",
-      icon: <FaRocket />
+      icon: <FaAward />
     }
   ];
 
@@ -112,7 +130,7 @@ const About = () => {
             problems, advancing human knowledge while securing a decentralized network through proof-of-research consensus.
           </p>
           <p>
-            Our platform combines nine specialized mathematical computation engines with a hybrid consensus mechanism 
+            Our platform combines twenty-five specialized mathematical computation engines with a hybrid consensus mechanism 
             that rewards meaningful discoveries, making mathematical research accessible to everyone while building 
             the most secure and innovative blockchain network.
           </p>
@@ -216,12 +234,63 @@ const About = () => {
           </div>
         </motion.div>
 
+        {/* Current Achievements Section */}
+        <motion.div
+          className="achievements-section"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          <h2>Current Achievements</h2>
+          <div className="achievements-grid">
+            <div className="achievement-card">
+              <div className="achievement-icon">
+                <FaBrain />
+              </div>
+              <div className="achievement-content">
+                <h3>41+ Discoveries</h3>
+                <p>Mathematical discoveries recorded on the blockchain with real research value</p>
+              </div>
+            </div>
+            
+            <div className="achievement-card">
+              <div className="achievement-icon">
+                <FaNetworkWired />
+              </div>
+              <div className="achievement-content">
+                <h3>Sepolia TestNet</h3>
+                <p>Fully operational blockchain network with staking and validation mechanisms</p>
+              </div>
+            </div>
+            
+            <div className="achievement-card">
+              <div className="achievement-icon">
+                <FaGraduationCap />
+              </div>
+              <div className="achievement-content">
+                <h3>Research Platform</h3>
+                <p>Complete web platform with mining, staking, and research paper generation</p>
+              </div>
+            </div>
+            
+            <div className="achievement-card">
+              <div className="achievement-icon">
+                <FaShieldAlt />
+              </div>
+              <div className="achievement-content">
+                <h3>Aurora Database</h3>
+                <p>Enterprise-grade database integration for blockchain event storage and analytics</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Technology Section */}
         <motion.div
           className="technology-section"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
         >
           <h2>Our Technology</h2>
           <div className="tech-grid">
@@ -241,7 +310,7 @@ const About = () => {
               </div>
               <div className="tech-content">
                 <h3>Mathematical Engines</h3>
-                <p>Nine specialized computation engines solving complex mathematical problems from Riemann zeros to quantum field theory</p>
+                <p>Twenty-five specialized computation engines solving complex mathematical problems from Riemann zeros to quantum field theory</p>
               </div>
             </div>
             
@@ -272,7 +341,7 @@ const About = () => {
           className="about-cta"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
+          transition={{ duration: 0.5, delay: 0.7 }}
         >
           <h2>Join the Mathematical Revolution</h2>
           <p>Be part of the future where blockchain technology advances human knowledge through mathematical discovery</p>

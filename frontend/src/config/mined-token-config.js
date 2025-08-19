@@ -12,7 +12,7 @@ export const MINED_TOKEN_CONFIG = {
 
   // Contract Addresses (Deployed to Sepolia) - ERC20 Only
   contracts: {
-    minedToken: "0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3" // MINEDTokenStandalone ERC20 contract
+    minedToken: "0x7877EFAb4aD3610792a135f6f8A241962fD2ab76" // MINEDToken contract
   },
 
   // Token Information
@@ -40,10 +40,10 @@ export const MINED_TOKEN_CONFIG = {
 
   // Pool Addresses
   pools: {
-    miningRewardsPool: "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4",
-    stakingRewardsPool: "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4",
-    researchFund: "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4",
-    treasury: "0x9bEb6D047aB5126bF20D9BD0940e022628276ab4"
+    miningRewardsPool: "0x7877EFAb4aD3610792a135f6f8A241962fD2ab76",
+    stakingRewardsPool: "0x7877EFAb4aD3610792a135f6f8A241962fD2ab76",
+    researchFund: "0x7877EFAb4aD3610792a135f6f8A241962fD2ab76",
+    treasury: "0x7877EFAb4aD3610792a135f6f8A241962fD2ab76"
   },
 
   // Features
@@ -74,8 +74,9 @@ export const METAMASK_NETWORK_CONFIG = {
   blockExplorerUrls: ['https://sepolia.etherscan.io']
 };
 
-// Token ABI (minimal for basic interactions)
+// Token ABI (MINEDTokenStandalone contract functions)
 export const MINED_TOKEN_ABI = [
+  // Standard ERC20 functions
   "function name() view returns (string)",
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
@@ -84,12 +85,44 @@ export const MINED_TOKEN_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
   "function approve(address spender, uint256 amount) returns (bool)",
   "function allowance(address owner, address spender) view returns (uint256)",
-  "function getAsymptoticTokenInfo() view returns (string, string, uint8, uint256, uint256, uint256, uint256)",
-  "function getEmissionParameters() view returns (uint256, uint256, uint256, uint256, uint256)",
-  "function getUserResearchContributions(address) view returns (uint256)",
+  
+  // Ownable functions
+  "function owner() view returns (address)",
+  "function transferOwnership(address newOwner)",
+  
+  // Public state variables (automatically get getter functions)
+  "function state() view returns (uint128 totalBurned, uint128 totalResearchValue, uint64 lastEmissionBlock, uint32 totalValidators, uint32 nextDiscoveryId)",
+  "function MAX_WORK_TYPE() view returns (uint8)",
+  "function stakingPoolBalance() view returns (uint256)",
+  "function validatorRewardPool() view returns (uint256)",
+  "function totalStaked() view returns (uint256)",
+  "function userStakes(address) view returns (uint256)",
+  "function userStakingRewards(address) view returns (uint256)",
+  "function validators(address) view returns (uint128 stakedAmount, uint64 totalValidations, uint32 reputation, uint32 registrationTime, bool isActive)",
+  "function discoveries(uint32) view returns (uint128 researchValue, uint64 timestamp, uint32 validationCount, uint16 complexity, uint8 significance, uint8 workType, address researcher, bool isValidated, bool isCollaborative, bool isFromPoW)",
+  "function workTypes(uint8) view returns (uint16 difficultyMultiplier, bool isActive)",
+  
+  // Main contract functions
+  "function requestValidation(uint32 discoveryId, uint256 fee) returns (uint32)",
+  "function validateDiscovery(uint32 requestId, bool isValid)",
+  "function stake(uint256 amount)",
+  "function unstake(uint256 amount)",
+  "function claimStakingRewards()",
+  "function startMiningSession(uint8 workType, uint16 difficulty) returns (uint32)",
+  "function submitPoWResult(uint32 sessionId, uint32 nonce, uint128 hash, uint16 complexity, uint8 significance)",
+  "function submitDiscovery(uint8 workType, uint8 significance, uint128 researchValue, string calldata description, bool isCollaborative) returns (uint32)",
+  
+  // Events
   "event Transfer(address indexed from, address indexed to, uint256 value)",
-  "event AsymptoticEmission(uint256 blockHeight, uint256 emission, uint256 researchValue, uint256 multiplier)",
-  "event ResearchValueAdded(uint256 blockHeight, address indexed contributor, uint256 researchValue)"
+  "event Approval(address indexed owner, address indexed spender, uint256 value)",
+  "event DiscoverySubmitted(uint32 indexed discoveryId, address indexed researcher, uint8 workType, uint128 researchValue)",
+  "event ValidationRequested(uint32 indexed requestId, uint32 indexed discoveryId, uint256 fee)",
+  "event DiscoveryValidated(uint32 indexed discoveryId, bool isValid, uint256 tokensAwarded)",
+  "event Staked(address indexed user, uint256 amount)",
+  "event Unstaked(address indexed user, uint256 amount)",
+  "event StakingRewardsClaimed(address indexed user, uint256 amount)",
+  "event MiningSessionStarted(uint32 indexed sessionId, address indexed miner, uint8 workType, uint16 difficulty)",
+  "event PoWResultSubmitted(uint32 indexed sessionId, address indexed miner, uint256 nonce, bytes32 hash)"
 ];
 
 // Helper Functions

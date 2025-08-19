@@ -1,0 +1,10 @@
+const CONTRACT_CONFIG = {
+  SEPOLIA: {
+    rpcUrl: process.env.WEB3_PROVIDER || 'https://sepolia.infura.io/v3/3f2349b3beef4a0f86c7a8596fef5c00',
+    tokenAddress: '0xf7b687854bA99B4Acafa509Fc42105B2a21369A7', // MINEDTokenFixed contract
+    chainId: 11155111,
+    explorerUrl: 'https://sepolia.etherscan.io'
+  }
+};
+
+module.exports = { CONTRACT_CONFIG };

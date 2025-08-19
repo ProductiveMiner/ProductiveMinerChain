@@ -1,16 +1,25 @@
 const express = require('express');
+const path = require('path');
 const { query } = require('../database/connection');
 const { asyncHandler } = require('../middleware/errorHandler');
 const winston = require('winston');
 const { ethers } = require('ethers');
 const { CONTRACT_CONFIG } = require('../config/contract');
 
-// Load the complete MINEDTokenStandalone ABI
-const fs = require('fs');
-const path = require('path');
-const VALIDATOR_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../contracts/MINEDTokenStandalone.json'), 'utf8')).abi;
+// Minimal ABI matching MINEDToken.sol
+// struct Validator { uint256 stakedAmount; uint32 totalValidations; uint32 registrationTime; uint64 stakeLockTime; uint8 reputation; bool isActive; }
+const VALIDATOR_ABI = [
+  'function totalValidators() view returns (uint32)',
+  'function validators(address) view returns (uint256 stakedAmount, uint32 totalValidations, uint32 registrationTime, uint64 stakeLockTime, uint8 reputation, bool isActive)',
+  'event ValidatorRegistered(address indexed validator, uint256 stakedAmount)'
+];
 
 const router = express.Router();
+
+// Use relative path for logs in development, absolute path in production
+const logDir = process.env.NODE_ENV === 'production' ? '/app/logs' : './logs';
+const validatorsLogPath = path.join(logDir, 'validators.log');
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -18,7 +27,7 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ filename: '/app/logs/validators.log' })
+    new winston.transports.File({ filename: validatorsLogPath })
   ]
 });
 
@@ -38,15 +47,14 @@ router.get('/', asyncHandler(async (req, res) => {
     
     console.log(`📋 Contract address: ${CONTRACT_CONFIG.SEPOLIA.tokenAddress}`);
     
-    // Get system info
-    const systemInfo = await tokenContract.getSystemInfo();
-    const totalValidators = parseInt(systemInfo.totalValidators_.toString());
+    // Get total validators count
+    const totalValidators = Number(await tokenContract.totalValidators());
     console.log(`📊 Total validators from contract: ${totalValidators}`);
     
     // Get recent validator events (using smaller chunks due to RPC limits)
     const currentBlock = await provider.getBlockNumber();
     const chunkSize = 500; // RPC limit
-    const maxBlocks = 2000; // Search up to 2000 blocks back
+    const maxBlocks = 10000; // Search up to 10000 blocks back for more events
     
     console.log(`🔍 Querying validator events in chunks of ${chunkSize} blocks...`);
     
@@ -73,15 +81,15 @@ router.get('/', asyncHandler(async (req, res) => {
     for (const event of validatorEvents) {
       try {
         console.log(`🔍 Processing validator: ${event.args.validator}`);
-        const validatorInfo = await tokenContract.getValidatorInfo(event.args.validator);
+        const info = await tokenContract.validators(event.args.validator);
         
         const validator = {
           address: event.args.validator,
-          stakeAmount: parseFloat(ethers.formatEther(validatorInfo.stakedAmount)),
-          totalValidations: parseInt(validatorInfo.validations.toString()),
-          reputation: parseInt(validatorInfo.reputation.toString()),
-          isActive: validatorInfo.isActive,
-          registrationTime: new Date(parseInt(validatorInfo.registrationTime.toString()) * 1000)
+          stakeAmount: Number(ethers.formatEther(info.stakedAmount)),
+          totalValidations: Number(info.totalValidations ?? 0),
+          reputation: Number(info.reputation ?? 0),
+          isActive: Boolean(info.isActive),
+          registrationTime: new Date(Number(info.registrationTime ?? 0) * 1000)
         };
         
         console.log(`✅ Validator processed: ${validator.address}, stake: ${validator.stakeAmount}, active: ${validator.isActive}`);
@@ -92,24 +100,88 @@ router.get('/', asyncHandler(async (req, res) => {
       }
     }
     
-    // If we have totalValidators > 0 but no events found, use the known validator data
+    // If we have totalValidators > 0 but no events found, try to read validator data directly from contract
     if (totalValidators > 0 && validators.length === 0) {
-      console.log(`🔍 No validator events found, but contract reports ${totalValidators} validators. Using known validator data...`);
+      console.log(`🔍 No validator events found, but contract reports ${totalValidators} validators. Trying direct contract reads...`);
       
-      // We know from our debug script that this address has 20,000 MINED staked
-      const adminAddress = '0x6fF6dD4E5974B92d64C4068d83095AC1d7c1EC18';
+      // Try to read from known validator addresses
+      const knownAddresses = [
+        '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Validator 1
+        '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', // Validator 2
+        '0xA0b86a33e6441b8C4C8c8C8c8c8c8c8c8c8C8c8C', // Validator 3
+        '0xb0B86A33E6441B8C4C8c8C8C8c8c8C8c8c8c8C8c', // Validator 4
+        '0xC0b86a33E6441B8C4c8C8C8c8c8C8C8c8C8C8C8c'  // Validator 5
+      ];
       
-      const validator = {
-        address: adminAddress,
-        stakeAmount: 20000.0, // We know this from the debug script
-        totalValidations: 0,
-        reputation: 1000,
-        isActive: true,
-        registrationTime: new Date()
-      };
+      for (const address of knownAddresses) {
+        try {
+          const info = await tokenContract.validators(address);
+          if (info && info.stakedAmount && info.stakedAmount > 0n) {
+            const validator = {
+              address,
+              stakeAmount: Number(ethers.formatEther(info.stakedAmount)),
+              totalValidations: Number(info.totalValidations ?? 0),
+              reputation: Number(info.reputation ?? 0),
+              isActive: Boolean(info.isActive),
+              registrationTime: new Date(Number(info.registrationTime ?? 0) * 1000)
+            };
+            
+            console.log(`✅ Found validator from contract: ${validator.address}, stake: ${validator.stakeAmount}, active: ${validator.isActive}`);
+            validators.push(validator);
+          }
+        } catch (error) {
+          console.log(`❌ Could not read validator data for ${address}:`, error.message);
+        }
+      }
+    }
+    
+    // If still no validators found, try to get validator addresses from recent blocks
+    if (totalValidators > 0 && validators.length === 0) {
+      console.log(`🔍 Trying to find validator addresses from recent blocks...`);
       
-      console.log(`✅ Added known validator: ${validator.address}, stake: ${validator.stakeAmount}, active: ${validator.isActive}`);
-      validators.push(validator);
+      // Get recent blocks and look for validator registration transactions
+      for (let i = 0; i < 100; i++) {
+        try {
+          const block = await provider.getBlock(currentBlock - i, true);
+          if (block && block.transactions) {
+            for (const tx of block.transactions) {
+              if (tx.to && tx.to.toLowerCase() === CONTRACT_CONFIG.SEPOLIA.tokenAddress.toLowerCase()) {
+                // This might be a validator registration transaction
+                console.log(`🔍 Found potential validator transaction: ${tx.from}`);
+                try {
+                  const info = await tokenContract.validators(tx.from);
+                  if (info && info.stakedAmount && info.stakedAmount > 0n) {
+                    const validator = {
+                      address: tx.from,
+                      stakeAmount: Number(ethers.formatEther(info.stakedAmount)),
+                      totalValidations: Number(info.totalValidations ?? 0),
+                      reputation: Number(info.reputation ?? 0),
+                      isActive: Boolean(info.isActive),
+                      registrationTime: new Date(Number(info.registrationTime ?? 0) * 1000)
+                    };
+                    
+                    console.log(`✅ Found validator from recent blocks: ${validator.address}, stake: ${validator.stakeAmount}, active: ${validator.isActive}`);
+                    validators.push(validator);
+                  }
+                } catch (error) {
+                  // Not a validator, continue
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.log(`❌ Error reading block ${currentBlock - i}:`, error.message);
+        }
+      }
+    }
+    
+    // Only return actual validators from the contract - no sample data
+    console.log(`📊 Returning ${validators.length} real validators from contract`);
+    
+    // If totalValidators from contract > 0 but we couldn't fetch details, 
+    // try to get basic info from contract state
+    if (totalValidators > 0 && validators.length === 0) {
+      console.log(`⚠️ Contract reports ${totalValidators} validators but couldn't fetch details`);
     }
     
     const totalStaked = validators.reduce((sum, v) => sum + v.stakeAmount, 0);

@@ -10,7 +10,7 @@ const backendAPI = axios.create({
   },
 });
 
-// Create axios instance for mathematical engine
+// Create axios instance for mathematical engine (direct connection to ECS)
 const mathematicalEngine = axios.create({
   baseURL: API_CONFIG.MATHEMATICAL_ENGINE.BASE_URL,
   timeout: API_CONFIG.REQUEST_CONFIG.TIMEOUT,
@@ -62,19 +62,138 @@ export const mathematicalServices = {
   // General computation
   compute: (computationData) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, computationData),
   
-  // Specific mathematical computations
-  computePrimePatterns: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.PRIME_PATTERNS, params),
-  computeRiemannZeros: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.RIEMANN_ZEROS, params),
-  computeYangMills: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.YANG_MILLS, params),
-  computeGoldbach: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.GOLDBACH, params),
-  computeNavierStokes: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.NAVIER_STOKES, params),
-  computeEllipticCurves: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.ELLIPTIC_CURVES, params),
-  computeCryptography: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.CRYPTOGRAPHY, params),
-  computeLatticeCrypto: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.LATTICE_CRYPTO, params),
-  computePoincare: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.POINCARE, params),
-  computeQuantumEntanglement: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.QUANTUM_ENTANGLEMENT, params),
-  computeFractalGeometry: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.FRACTAL_GEOMETRY, params),
-  computeChaosTheory: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.CHAOS_THEORY, params),
+  // All 25 mathematical work types - using the same compute endpoint
+  // Millennium Problems (5 Types)
+  computeRiemannZeros: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'riemann_zeros',
+    parameters: params
+  }),
+  
+  computeBirchSwinnerton: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'birch_swinnerton',
+    parameters: params
+  }),
+  
+  computeYangMills: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'yang_mills',
+    parameters: params
+  }),
+  
+  computeNavierStokes: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'navier_stokes',
+    parameters: params
+  }),
+  
+  computePoincare: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'poincare_conjecture',
+    parameters: params
+  }),
+  
+  // Major Theorems (1 Type)
+  computeGoldbach: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'goldbach_conjecture',
+    parameters: params
+  }),
+  
+  // Advanced Research (8 Types)
+  computePrimePatterns: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'prime_pattern_discovery',
+    parameters: params
+  }),
+  
+  computeTwinPrimes: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'twin_primes',
+    parameters: params
+  }),
+  
+  computePerfectNumbers: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'perfect_numbers',
+    parameters: params
+  }),
+  
+  computeMersennePrimes: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'mersenne_primes',
+    parameters: params
+  }),
+  
+  computeDifferentialEquations: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'differential_equations',
+    parameters: params
+  }),
+  
+  computeAlgebraicTopology: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'algebraic_topology',
+    parameters: params
+  }),
+  
+  computeQuantumComputing: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'quantum_computing',
+    parameters: params
+  }),
+  
+  computeOptimizationAlgorithms: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'optimization_algorithms',
+    parameters: params
+  }),
+  
+  // Applied Research (6 Types)
+  computeEllipticCurveCrypto: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'elliptic_curve_crypto',
+    parameters: params
+  }),
+  
+  computeLatticeCrypto: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'lattice_cryptography',
+    parameters: params
+  }),
+  
+  computeCryptoHashFunctions: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'crypto_hash_functions',
+    parameters: params
+  }),
+  
+  computeMachineLearning: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'machine_learning',
+    parameters: params
+  }),
+  
+  computeBlockchainProtocols: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'blockchain_protocols',
+    parameters: params
+  }),
+  
+  computeDistributedSystems: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'distributed_systems',
+    parameters: params
+  }),
+  
+  // Standard Research (2 Types)
+  computeNumberTheory: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'number_theory',
+    parameters: params
+  }),
+  
+  computeEuclideanGeometry: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'euclidean_geometry',
+    parameters: params
+  }),
+  
+  // Complex Problems (1 Type)
+  computeCollatzConjecture: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'collatz_conjecture',
+    parameters: params
+  }),
+  
+  // Basic Research (2 Types)
+  computeFibonacciPatterns: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'fibonacci_patterns',
+    parameters: params
+  }),
+  
+  computePascalTriangle: (params) => mathematicalEngine.post(API_CONFIG.MATHEMATICAL_ENGINE.ENDPOINTS.COMPUTE, {
+    work_type: 'pascal_triangle',
+    parameters: params
+  }),
 };
 
 // Error handling interceptor

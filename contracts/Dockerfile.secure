@@ -1,0 +1,46 @@
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache git python3 make g++ curl
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies with legacy peer deps to avoid conflicts
+RUN npm install --legacy-peer-deps
+
+# Copy contract source files
+COPY . .
+
+# Create artifacts directory
+RUN mkdir -p artifacts
+
+# Compile contracts
+RUN npx hardhat compile
+
+# Set environment variables
+ENV NODE_ENV=production
+
+# Create deployment script for ProductiveMinerSecure
+RUN echo '#!/bin/sh' > /app/deploy-secure.sh && \
+    echo 'echo "🔒 Deploying ProductiveMinerSecure contract..."' >> /app/deploy-secure.sh && \
+    echo '' >> /app/deploy-secure.sh && \
+    echo '# Check if network is specified' >> /app/deploy-secure.sh && \
+    echo 'if [ -z "$NETWORK" ]; then' >> /app/deploy-secure.sh && \
+    echo '    echo "Using default network: localhost"' >> /app/deploy-secure.sh && \
+    echo '    NETWORK="localhost"' >> /app/deploy-secure.sh && \
+    echo 'fi' >> /app/deploy-secure.sh && \
+    echo '' >> /app/deploy-secure.sh && \
+    echo '# Deploy the secure contract' >> /app/deploy-secure.sh && \
+    echo 'echo "🚀 Deploying to network: $NETWORK"' >> /app/deploy-secure.sh && \
+    echo 'npx hardhat run scripts/deploy-secure.js --network $NETWORK' >> /app/deploy-secure.sh && \
+    echo '' >> /app/deploy-secure.sh && \
+    echo 'echo "✅ ProductiveMinerSecure deployed successfully!"' >> /app/deploy-secure.sh && \
+    echo 'echo "🔍 Contract verification attempted automatically"' >> /app/deploy-secure.sh && \
+    chmod +x /app/deploy-secure.sh
+
+# Default command - run secure deployment
+CMD ["/app/deploy-secure.sh"]

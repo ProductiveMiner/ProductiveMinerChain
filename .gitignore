@@ -126,12 +126,11 @@ artifacts/
 typechain/
 typechain-types/
 
-# AWS and deployment configs
+# AWS and deployment configs (keep essential ones)
 aws-deployment-config.json
 backend-services-config.json
 backend-task-definition*.json
 engine-task-definition.json
-deployment-info.json
 distribution-config.json
 fresh-cloudfront-config.json
 new-cloudfront-config.json
@@ -140,44 +139,7 @@ update-cloudfront-api-routing.json
 update-dns*.json
 current-distribution.json
 
-# Troubleshooting and status files
-*_STATUS.md
-*_ANALYSIS.md
-*_FIX.md
-*_RESOLUTION.md
-*_SUCCESS.md
-*_SUMMARY.md
-*_GUIDE.md
-*_DEPLOYMENT.md
-*_TROUBLESHOOTING.md
-*_ERROR_ANALYSIS.md
-*_CONNECTIVITY.md
-*_CACHE*.md
-*_CORS*.md
-*_MIXED_CONTENT*.md
-*_API*.md
-*_MINING*.md
-*_CONTRACT*.md
-*_VERIFICATION*.md
-*_SECURITY*.md
-*_COMPILATION*.md
-*_OPTIMIZATION*.md
-*_EXCEPTION*.md
-*_IMPROVEMENTS*.md
-*_AUDIT*.md
-*_FINAL*.md
-*_NEXT_STEPS.md
-*_WORKING*.md
-*_DEMO*.md
-*_RECOMMENDATION.md
-*_FUNCTIONALITY*.md
-*_COMPATIBILITY*.md
-*_STRATEGIC*.md
-*_FRESH*.md
-*_PLATFORM*.md
-*_LOCAL*.md
-
-# Test and debug files
+# Temporary and test files
 test-*.js
 test-*.sh
 debug_*.js
@@ -189,7 +151,7 @@ connectivity-report.md
 frontend-build-*/
 frontend_build_*.zip
 
-# Scripts and deployment files
+# Temporary scripts and deployment files
 deploy-*.sh
 deploy-*.js
 fix-*.sh
@@ -201,12 +163,10 @@ generate-*.js
 run-*.js
 add-*.sql
 
-# Docker files for troubleshooting
-Dockerfile.*
-docker-compose.*.yml
-
 # Backup directories
 backups/
+cleanup-backup/
+docs-backup/
 
 # SSL certificates
 ssl/
@@ -224,9 +184,6 @@ substrate-simple/
 
 # ProductiveMinerChain (duplicate)
 ProductiveMinerChain/
-
-# Engine
-engine/
 
 # ML
 ml/

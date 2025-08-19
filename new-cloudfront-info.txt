@@ -1,7 +1,0 @@
-New CloudFront Distribution Created
-==================================
-Distribution ID: E1V33BV296V552
-Domain: https://E1V33BV296V552.cloudfront.net
-S3 Bucket: productiveminer
-Created: Mon Aug 11 03:30:07 PDT 2025
-Purpose: Break cache issues for MINED token integration

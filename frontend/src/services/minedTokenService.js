@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import CONTRACT_CONFIG from '../config/contracts';
 import { MINED_TOKEN_CONFIG } from '../config/mined-token-config';
-import MINEDTokenStandaloneABI from '../contracts/MINEDTokenStandalone.json';
+import MINEDTokenABI from '../contracts/MINEDToken.json';
 
 class MinedTokenService {
   constructor() {
@@ -53,9 +53,12 @@ class MinedTokenService {
       
       // Use the full standalone ABI since we know the contract supports it
       console.log('🔍 Using full standalone ABI...');
+                  console.log('ABI length:', MINEDTokenABI.abi.length);
+    console.log('ABI functions:', MINEDTokenABI.abi.filter(item => item.type === 'function').map(f => f.name));
+      
       this.tokenContract = new ethers.Contract(
         MINED_TOKEN_CONFIG.contracts.minedToken,
-        MINEDTokenStandaloneABI.abi,
+        MINEDTokenABI.abi,
         this.provider
       );
       
@@ -65,10 +68,11 @@ class MinedTokenService {
         const name = await this.tokenContract.name();
         console.log('✅ Full ABI works, name:', name);
         
-        // Test getSystemInfo function specifically
-        console.log('🔍 Testing getSystemInfo function...');
-        const systemInfo = await this.tokenContract.getSystemInfo();
-        console.log('✅ getSystemInfo works, system info:', systemInfo);
+        // Test basic contract functions
+        console.log('🔍 Testing basic contract functions...');
+        const symbol = await this.tokenContract.symbol();
+        const decimals = await this.tokenContract.decimals();
+        console.log('✅ Basic functions work, symbol:', symbol, 'decimals:', decimals);
         
         this.isInitialized = true;
         console.log('✅ MINED Token Service initialized with full standalone ABI');
@@ -83,7 +87,7 @@ class MinedTokenService {
       // Try fallback RPC if main fails
       try {
         console.log('🔄 Trying fallback RPC...');
-        const FALLBACK_RPC_URL = 'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161';
+        const FALLBACK_RPC_URL = 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC';
         this.provider = new ethers.JsonRpcProvider(FALLBACK_RPC_URL);
         
         // Test the fallback
@@ -96,10 +100,10 @@ class MinedTokenService {
           throw new Error(`No contract deployed at address: ${MINED_TOKEN_CONFIG.contracts.minedToken}`);
         }
         
-        // Use full standalone ABI with fallback
+        // Use full MINEDToken ABI with fallback
         this.tokenContract = new ethers.Contract(
           MINED_TOKEN_CONFIG.contracts.minedToken,
-          MINEDTokenStandaloneABI.abi,
+          MINEDTokenABI.abi,
           this.provider
         );
         
@@ -129,7 +133,13 @@ class MinedTokenService {
   // Format amount for display
   formatAmount(amount) {
     if (!amount || amount === '0') return '0';
-    const num = parseFloat(amount);
+    
+    // If amount is in wei (large number), convert to ether first
+    let num = parseFloat(amount);
+    if (num > 1e15) { // If it's likely in wei (more than 0.001 ether)
+      num = num / 1e18; // Convert wei to ether
+    }
+    
     return num.toLocaleString('en-US', {
       maximumFractionDigits: 2,
       minimumFractionDigits: 2
@@ -261,27 +271,28 @@ class MinedTokenService {
       let currentEmission = '0';
       
       try {
-        console.log('Calling getSystemInfo()...');
-        systemInfo = await this.tokenContract.getSystemInfo();
-        console.log('Raw systemInfo result:', systemInfo);
-        console.log('SystemInfo type:', typeof systemInfo);
-        console.log('SystemInfo length:', systemInfo ? systemInfo.length : 'undefined');
+        console.log('Getting system info from state() function...');
+        // Use the public state getter function instead of getSystemInfo()
+        const stateInfo = await this.tokenContract.state();
+        console.log('Raw state result:', stateInfo);
         
-        // systemInfo is a tuple: [totalSupply_, totalBurned_, totalResearchValue_, totalValidators_, currentEmission]
-        if (systemInfo && Array.isArray(systemInfo) && systemInfo.length >= 5) {
-          const [systemTotalSupply, totalBurned_, totalResearchValue_, totalValidators_, currentEmission_] = systemInfo;
-          totalBurned = ethers.formatEther(totalBurned_.toString());
-          totalResearchValue = totalResearchValue_.toString();
-          currentEmission = ethers.formatEther(currentEmission_.toString());
-          console.log('System info retrieved:', { totalBurned, totalResearchValue, currentEmission });
+        // stateInfo is a struct: {totalBurned, totalResearchValue, lastEmissionBlock, totalValidators, nextDiscoveryId}
+        if (stateInfo) {
+          totalBurned = ethers.formatEther(stateInfo.totalBurned.toString());
+          totalResearchValue = stateInfo.totalResearchValue.toString();
+          currentEmission = '0'; // Placeholder for current emission
+          console.log('System info retrieved from state:', { totalBurned, totalResearchValue });
         } else {
-          console.warn('getSystemInfo returned unexpected format:', systemInfo);
+          console.warn('state() returned no data');
           totalBurned = '0';
           totalResearchValue = '0';
           currentEmission = '0';
         }
       } catch (systemError) {
-        console.warn('getSystemInfo not available, using basic ERC20 data:', systemError.message);
+        console.warn('state() not available, using basic ERC20 data:', systemError.message);
+        totalBurned = '0';
+        totalResearchValue = '0';
+        currentEmission = '0';
       }
       
       return {
@@ -329,22 +340,21 @@ class MinedTokenService {
       let totalResearchValue = 0;
       
       try {
-        console.log('Calling calculateEmission()...');
-        const emission = await this.tokenContract.calculateEmission();
-        currentEmissionRate = parseFloat(ethers.formatEther(emission.toString()));
+        console.log('Using default emission rate for standalone contract...');
+        currentEmissionRate = 1000; // Default emission rate for standalone contract
         
-        // Try to get system info for research value
-        const systemInfo = await this.tokenContract.getSystemInfo();
-        if (systemInfo && Array.isArray(systemInfo) && systemInfo.length >= 5) {
-          const [systemTotalSupply, totalBurned, totalResearchValue_, totalValidators, currentEmission] = systemInfo;
-          totalResearchValue = parseInt(totalResearchValue_.toString());
-        } else {
+        // Try to get research value from state
+        try {
+          const stateInfo = await this.tokenContract.state();
+          totalResearchValue = parseInt(stateInfo.totalResearchValue.toString());
+        } catch (stateError) {
+          console.warn('Could not get state info:', stateError.message);
           totalResearchValue = 0;
         }
         
-        console.log('Emission rate from contract:', currentEmissionRate);
+        console.log('Emission rate for standalone contract:', currentEmissionRate);
       } catch (emissionError) {
-        console.warn('calculateEmission not available, using fallback calculation:', emissionError.message);
+        console.warn('Using fallback calculation:', emissionError.message);
         
         // Fallback to basic calculation
         const totalSupply = await this.tokenContract.totalSupply();
@@ -523,6 +533,120 @@ class MinedTokenService {
     } catch (error) {
       console.error('Failed to claim staking rewards:', error);
       throw error;
+    }
+  }
+
+  // Fetch recent discoveries directly from the chain (fallback when API is empty)
+  async getRecentDiscoveries(limit = 10) {
+    try {
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+
+      if (!this.tokenContract) {
+        throw new Error('Token contract not initialized');
+      }
+
+      // Get next discovery id from state() if available; otherwise try incremental fetch
+      let nextDiscoveryId = 0;
+      try {
+        const stateInfo = await this.tokenContract.state();
+        if (stateInfo && stateInfo.nextDiscoveryId != null) {
+          nextDiscoveryId = Number(stateInfo.nextDiscoveryId);
+        }
+      } catch (e) {
+        // Fallback: probe upwards until failure (cap for safety)
+        let probe = 0;
+        for (let i = 0; i < 50; i++) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            await this.tokenContract.discoveries(probe);
+            probe += 1;
+          } catch {
+            break;
+          }
+        }
+        nextDiscoveryId = probe;
+      }
+
+      const items = [];
+      const start = Math.max(0, nextDiscoveryId - limit);
+      for (let i = nextDiscoveryId - 1; i >= start; i--) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const d = await this.tokenContract.discoveries(i);
+          // Normalize fields across possible ABI layouts
+          const getIfAddress = (val) => (typeof val === 'string' && /^0x[0-9a-fA-F]{40}$/.test(val)) ? val : null;
+
+          // Researcher address can be at named field or index 6 (or 0 in some layouts)
+          const researcher = d.researcher ?? getIfAddress(d[6]) ?? getIfAddress(d[0]) ?? '0x0000000000000000000000000000000000000000';
+
+          // Research value may be at named field, index 0, or index 6 depending on layout
+          let researchValueRaw = d.researchValue;
+          if (researchValueRaw == null || typeof researchValueRaw === 'string') {
+            researchValueRaw = (typeof d[0] === 'bigint') ? d[0] : (typeof d[6] === 'bigint' ? d[6] : 0n);
+          }
+
+          // Timestamp likely at named field or index 1
+          const timestamp = d.timestamp ?? d[1] ?? 0n;
+          const validationCount = d.validationCount ?? d[2] ?? 0n;
+          const complexity = d.complexity ?? d[3] ?? 0n;
+          const significance = d.significance ?? d[4] ?? 0n;
+          const workType = d.workType ?? d[5] ?? 0n;
+          const isValidated = d.isValidated ?? d[7] ?? false;
+          const isCollaborative = d.isCollaborative ?? d[8] ?? false;
+          const isFromPoW = d.isFromPoW ?? d[9] ?? true;
+
+          const workTypeId = Number(workType);
+          const workTypeMap = {
+            0: 'Riemann Zeros',
+            1: 'Goldbach Conjecture'
+          };
+
+          const rv = (typeof researchValueRaw === 'bigint') ? researchValueRaw : BigInt(researchValueRaw || 0);
+
+          // Skip obviously empty placeholders
+          const isZeroAddress = researcher === '0x0000000000000000000000000000000000000000';
+          const isZeroValue = rv === 0n && Number(complexity || 0) === 0 && Number(significance || 0) === 0;
+          if (isZeroAddress && isZeroValue) {
+            continue;
+          }
+
+          const normalized = {
+            discovery_id: i,
+            researcher_address: researcher,
+            work_type_id: workTypeId,
+            work_type_name: workTypeMap[workTypeId] || `Work Type ${workTypeId}`,
+            problem_statement: 'On-chain discovery generated from PoW mining result',
+            complexity: Number(complexity || 0),
+            significance: Number(significance || 0),
+            research_value: Number(ethers.formatEther(rv)),
+            computation_time: null,
+            energy_consumed: null,
+            is_collaborative: Boolean(isCollaborative),
+            is_from_pow: Boolean(isFromPoW),
+            is_validated: Boolean(isValidated),
+            validation_count: Number(validationCount || 0),
+            novelty_score: null,
+            algorithm_used: 'N/A',
+            transaction_hash: null,
+            contract_address: MINED_TOKEN_CONFIG.contracts.minedToken,
+            network: MINED_TOKEN_CONFIG.network?.name || 'Sepolia',
+            created_at: timestamp ? new Date(Number(timestamp) * 1000).toISOString() : null,
+            updated_at: timestamp ? new Date(Number(timestamp) * 1000).toISOString() : null
+          };
+          items.push(normalized);
+        } catch (err) {
+          if (items.length === 0) {
+            break;
+          }
+        }
+      }
+
+      return items;
+    } catch (error) {
+      console.error('Failed to get recent discoveries from chain:', error);
+      return [];
     }
   }
 

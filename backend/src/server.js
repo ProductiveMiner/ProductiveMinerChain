@@ -7,6 +7,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
+const path = require('path');
 
 // Import routes and middleware
 const healthRoutes = require('./routes/health');
@@ -22,10 +23,17 @@ const stakingRoutes = require('./routes/staking');
 const contractRoutes = require('./routes/contract');
 const explorerRoutes = require('./routes/explorer');
 const validatorsRoutes = require('./routes/validators');
+const syncRoutes = require('./routes/sync');
 
 // Import database connection
 const { connectDB, query } = require('./database/connection');
 const { connectRedis, get, set } = require('./database/redis');
+
+// Import contract service
+const contractService = require('./services/contractService');
+
+// Import blockchain sync service
+const blockchainSyncService = require('./services/blockchainSyncService');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -44,7 +52,9 @@ const defaultOrigins = [
   'http://localhost:3002',
   'https://productiveminer.org',
   'https://www.productiveminer.org',
-  'https://dz646qhm9c2az.cloudfront.net'
+  'https://api.productiveminer.org',
+  'https://dz646qhm9c2az.cloudfront.net',
+  'http://productiveminer.s3-website-us-east-1.amazonaws.com'
 ];
 const envOrigins = [];
 if (process.env.FRONTEND_URL) envOrigins.push(process.env.FRONTEND_URL);
@@ -70,6 +80,10 @@ const io = new Server(server, {
 });
 
 // Configure logging
+const logDir = process.env.NODE_ENV === 'production' ? '/app/logs' : './logs';
+const errorLogPath = path.join(logDir, 'error.log');
+const combinedLogPath = path.join(logDir, 'combined.log');
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -79,8 +93,8 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'productiveminer-backend' },
   transports: [
-    new winston.transports.File({ filename: '/app/logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: '/app/logs/combined.log' })
+    new winston.transports.File({ filename: errorLogPath, level: 'error' }),
+    new winston.transports.File({ filename: combinedLogPath })
   ]
 });
 
@@ -179,6 +193,7 @@ app.use('/api/staking', optionalAuthMiddleware, stakingRoutes);
 app.use('/api/contract', contractRoutes);
 app.use('/api/explorer', explorerRoutes);
 app.use('/api/validators', validatorsRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
@@ -254,7 +269,7 @@ server.listen(PORT, HOST, () => {
   logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
 
-// Try to connect to databases in the background
+// Try to connect to databases and initialize services in the background
 (async () => {
   try {
     // Connect to PostgreSQL
@@ -272,6 +287,58 @@ server.listen(PORT, HOST, () => {
   } catch (error) {
     logger.error('Failed to connect to Redis cache:', error);
     // Don't exit, continue without Redis
+  }
+
+  try {
+    // Initialize contract service and event listeners
+    await contractService.initialize();
+    await contractService.setupEventListeners();
+    logger.info('Contract service initialized and event listeners setup');
+  } catch (error) {
+    logger.error('Failed to initialize contract service:', error);
+    // Don't exit, continue without contract service
+  }
+
+  try {
+    // Start blockchain sync service for automatic event synchronization
+    await blockchainSyncService.start();
+    logger.info('Blockchain sync service started successfully');
+  } catch (error) {
+    logger.error('Failed to start blockchain sync service:', error);
+    // Don't exit, continue without sync service
+  }
+
+  try {
+    // Optional: background Aurora sync of on-chain events via recorder script
+    if (process.env.ENABLE_AURORA_SYNC === 'true') {
+      const path = require('path');
+      const { spawn } = require('child_process');
+
+      const runRecorder = () => {
+        const scriptPath = path.join(__dirname, '..', 'scripts', 'record-events-by-worktype-aurora.js');
+        logger.info('Starting Aurora event recorder run');
+        const child = spawn(process.execPath, [scriptPath], {
+          cwd: path.join(__dirname, '..'),
+          env: process.env,
+          stdio: ['ignore', 'inherit', 'inherit']
+        });
+        child.on('exit', (code) => {
+          logger.info(`Aurora recorder finished with code ${code}`);
+        });
+        child.on('error', (err) => {
+          logger.error('Aurora recorder failed to start', { error: err.message });
+        });
+      };
+
+      // Run once on startup, then every 5 minutes
+      runRecorder();
+      setInterval(runRecorder, 5 * 60 * 1000);
+      logger.info('Aurora recorder scheduler enabled (5m interval)');
+    } else {
+      logger.info('Aurora recorder scheduler disabled (ENABLE_AURORA_SYNC not true)');
+    }
+  } catch (error) {
+    logger.error('Failed to setup Aurora recorder scheduler:', error);
   }
 })();
 
@@ -362,15 +429,33 @@ setInterval(autoConfirmBlocks, 10000);
 setTimeout(autoConfirmBlocks, 5000);
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  
+  try {
+    // Stop blockchain sync service
+    await blockchainSyncService.stop();
+    logger.info('Blockchain sync service stopped');
+  } catch (error) {
+    logger.error('Error stopping blockchain sync service:', error);
+  }
+  
   server.close(() => {
     logger.info('Process terminated');
   });
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
+  
+  try {
+    // Stop blockchain sync service
+    await blockchainSyncService.stop();
+    logger.info('Blockchain sync service stopped');
+  } catch (error) {
+    logger.error('Error stopping blockchain sync service:', error);
+  }
+  
   server.close(() => {
     logger.info('Process terminated');
   });

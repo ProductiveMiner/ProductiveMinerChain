@@ -1,10 +1,59 @@
 {
+  "name": "productiveminer-api-test-coverage",
+  "version": "1.0.0",
+  "description": "Comprehensive API test coverage for ProductiveMiner.org",
+  "main": "api-test-coverage.js",
+  "scripts": {
+    "test": "mocha api-test-coverage.js --timeout 30000",
+    "test:health": "mocha api-test-coverage.js --grep 'Health' --timeout 30000",
+    "test:auth": "mocha api-test-coverage.js --grep 'Authentication' --timeout 30000",
+    "test:mining": "mocha api-test-coverage.js --grep 'Mining' --timeout 30000",
+    "test:research": "mocha api-test-coverage.js --grep 'Research' --timeout 30000",
+    "test:security": "mocha api-test-coverage.js --grep 'Security' --timeout 30000",
+    "test:performance": "mocha api-test-coverage.js --grep 'Performance' --timeout 30000",
+    "test:integration": "mocha api-test-coverage.js --grep 'Integration' --timeout 30000",
+    "test:quick": "mocha api-test-coverage.js --grep 'Health|Authentication|Token' --timeout 15000",
+    "test:full": "mocha api-test-coverage.js --timeout 60000 --reporter spec",
+    "test:ci": "mocha api-test-coverage.js --timeout 30000 --reporter xunit --reporter-option output=test-results.xml",
+    "lint": "eslint api-test-coverage.js",
+    "coverage": "nyc mocha api-test-coverage.js --timeout 30000",
+    "setup": "npm install && echo 'Test environment setup complete'"
+  },
+  "keywords": [
+    "api",
+    "testing",
+    "coverage",
+    "productiveminer",
+    "blockchain",
+    "mining",
+    "research"
+  ],
+  "author": "ProductiveMiner Team",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.11.0",
+    "chai": "^4.5.0",
+    "dotenv": "^17.2.1",
     "ethers": "^6.15.0",
-    "node-fetch": "^3.3.2",
+    "mocha": "^10.8.2",
     "pg": "^8.16.3",
     "uuid": "^11.1.0",
     "web3": "^4.16.0"
-  }
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "nyc": "^15.1.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/productiveminer/api-test-coverage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/productiveminer/api-test-coverage/issues"
+  },
+  "homepage": "https://productiveminer.org"
 }

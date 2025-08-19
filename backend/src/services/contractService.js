@@ -6,10 +6,10 @@ class ContractService {
     this.contract = null;
     this.signer = null;
     this.isConnected = false;
-    this.contractAddress = process.env.CONTRACT_ADDRESS || '0xc7374F27c695112B81495ECF28b90aD441CCf4b9';
-    this.tokenAddress = process.env.TOKEN_ADDRESS || '0x78916EB89CDB2Ef32758fCc41f3aef3FDf052ab3'; // MINEDTokenStandalone
+    this.contractAddress = process.env.CONTRACT_ADDRESS || '0x7877EFAb4aD3610792a135f6f8A241962fD2ab76'; // Correct MINEDToken address
+    this.tokenAddress = process.env.TOKEN_ADDRESS || '0x7877EFAb4aD3610792a135f6f8A241962fD2ab76'; // Correct MINEDToken address
     this.privateKey = process.env.PRIVATE_KEY || null;
-    this.rpcUrl = process.env.CONTRACT_RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC';
+    this.rpcUrl = process.env.WEB3_PROVIDER || 'https://eth-sepolia.g.alchemy.com/v2/EsD9nEjl3rvwE35tYtTZC';
   }
 
   async initialize() {
@@ -41,37 +41,10 @@ class ContractService {
 
   async loadContract() {
     try {
-      // Contract ABI - simplified version for integration
-      const contractABI = [
-        // View functions
-        "function maxDifficulty() external view returns (uint256)",
-        "function baseReward() external view returns (uint256)",
-        "function minStakeAmount() external view returns (uint256)",
-        "function stakingAPY() external view returns (uint256)",
-        "function totalStaked() external view returns (uint256)",
-        "function discoveryCounter() external view returns (uint256)",
-        "function sessionCounter() external view returns (uint256)",
-        "function totalRewardsDistributed() external view returns (uint256)",
-        "function getMinerStats(address _miner) external view returns (tuple(uint256,uint256,uint256,uint256,uint256))",
-        "function stakingInfo(address _staker) external view returns (tuple(uint256,uint256,uint48,bool))",
-        "function discoveries(uint256 _id) external view returns (tuple(uint256,address,uint8,uint256,uint256,uint48,bytes32,bool,string))",
-        "function sessions(uint256 _id) external view returns (tuple(uint256,address,uint8,uint48,uint48,uint256,bool,bool))",
-        
-        // State-changing functions
-        "function startMiningSession(uint8 _workType, uint256 _difficulty) external",
-        "function completeMiningSession(uint256 _sessionId, bytes32 _proofHash, string calldata _metadata) external",
-        "function stake() external payable",
-        "function unstake(uint256 _amount) external",
-        "function claimRewards() external",
-        
-        // Events
-        "event DiscoverySubmitted(uint256 indexed discoveryId, address indexed miner, uint8 indexed workType, uint256 difficulty)",
-        "event MiningSessionStarted(uint256 indexed sessionId, address indexed miner, uint8 indexed workType, uint256 difficulty)",
-        "event MiningSessionCompleted(uint256 indexed sessionId, address indexed miner, uint256 reward)",
-        "event Staked(address indexed staker, uint256 amount)",
-        "event Unstaked(address indexed staker, uint256 amount)",
-        "event RewardsClaimed(address indexed staker, uint256 amount)"
-      ];
+      // Load the complete MINEDTokenFixed ABI
+      const fs = require('fs');
+      const path = require('path');
+      const contractABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../contracts/MINEDToken.json'), 'utf8')).abi;
 
       this.contract = new ethers.Contract(this.contractAddress, contractABI, this.signer);
       console.log(`Contract loaded at address: ${this.contractAddress}`);
@@ -84,96 +57,118 @@ class ContractService {
   async getNetworkStats() {
     try {
       if (!this.contract) {
-        return this.getMockNetworkStats();
+        throw new Error('Contract not initialized');
       }
 
       const [
-        maxDifficulty,
-        baseReward,
+        totalSupply,
         totalStaked,
-        discoveryCounter,
-        sessionCounter,
-        totalRewardsDistributed
+        nextDiscoveryId,
+        nextSessionId,
+        stakingPoolBalance,
+        validatorRewardPool,
+        state
       ] = await Promise.all([
-        this.contract.maxDifficulty(),
-        this.contract.baseReward(),
+        this.contract.totalSupply(),
         this.contract.totalStaked(),
-        this.contract.discoveryCounter(),
-        this.contract.sessionCounter(),
-        this.contract.totalRewardsDistributed()
+        this.contract.nextDiscoveryId(),
+        this.contract.nextSessionId(),
+        this.contract.stakingPoolBalance(),
+        this.contract.validatorRewardPool(),
+        this.contract.state()
       ]);
 
       return {
-        maxDifficulty: Number(maxDifficulty),
-        baseReward: Number(baseReward),
+        maxDifficulty: 1000, // Default max difficulty for standalone contract
+        baseReward: 1000, // Default base reward
         totalStaked: Number(totalStaked),
-        totalDiscoveries: Number(discoveryCounter),
-        totalSessions: Number(sessionCounter),
-        totalRewardsDistributed: Number(totalRewardsDistributed),
-        currentActiveSessions: 8, // This would need to be calculated by iterating sessions
+        totalDiscoveries: Number(nextDiscoveryId),
+        totalSessions: Number(nextSessionId),
+        totalRewardsDistributed: Number(validatorRewardPool),
+        currentActiveSessions: 0, // Would need to iterate sessions to calculate
         quantumSecurityLevel: 256,
-        averageComputationalComplexity: 750
+        averageComputationalComplexity: 750,
+        totalSupply: Number(totalSupply),
+        stakingPoolBalance: Number(stakingPoolBalance),
+        totalBurned: Number(state.totalBurned),
+        totalResearchValue: Number(state.totalResearchValue),
+        totalValidators: Number(state.totalValidators)
       };
     } catch (error) {
       console.error('Failed to get network stats from contract:', error);
-      return this.getMockNetworkStats();
+      throw error; // Re-throw error instead of returning mock data
     }
   }
 
   async getContractStats() {
     try {
       if (!this.contract) {
-        return this.getMockContractStats();
+        throw new Error('Contract not initialized');
       }
 
-      const stats = await this.contract.getContractStats();
+      const [nextDiscoveryId, nextSessionId, totalStaked, validatorRewardPool, state] = await Promise.all([
+        this.contract.nextDiscoveryId(),
+        this.contract.nextSessionId(),
+        this.contract.totalStaked(),
+        this.contract.validatorRewardPool(),
+        this.contract.state()
+      ]);
+      
       return {
-        totalDiscoveries: Number(stats[0]),
-        totalSessions: Number(stats[1]),
-        totalStaked: Number(stats[2]),
-        totalRewardsDistributed: Number(stats[3]),
-        currentActiveSessions: Number(stats[4]),
-        isPaused: stats[5]
+        totalDiscoveries: Number(nextDiscoveryId),
+        totalSessions: Number(nextSessionId),
+        totalStaked: Number(totalStaked),
+        totalRewardsDistributed: Number(validatorRewardPool),
+        currentActiveSessions: 0, // Would need to iterate sessions to calculate
+        isPaused: false // Standalone contract doesn't have pause functionality
       };
     } catch (error) {
       console.error('Failed to get contract stats:', error);
-      return this.getMockContractStats();
+      throw error; // Re-throw error instead of returning mock data
     }
   }
 
   async getStakingInfo(address) {
     try {
       if (!this.contract) {
-        return this.getMockStakingInfo();
+        throw new Error('Contract not initialized');
       }
 
-      const stakingInfo = await this.contract.stakingInfo(address);
-      const apy = await this.contract.stakingAPY();
+      const [userStakes, userStakingRewards, totalStaked, validatorRewardPool] = await Promise.all([
+        this.contract.userStakes(address),
+        this.contract.userStakingRewards(address),
+        this.contract.totalStaked(),
+        this.contract.validatorRewardPool()
+      ]);
+      
+      // Calculate APY based on validator reward pool and total staked
+      const apy = totalStaked > 0 ? (Number(validatorRewardPool) / Number(totalStaked)) * 100 * 365 : 8.0;
       
       return {
-        stakedAmount: Number(stakingInfo[0]),
-        rewards: Number(stakingInfo[1]),
-        lastClaimTime: Number(stakingInfo[2]),
-        apy: Number(apy),
-        isActive: stakingInfo[3]
+        stakedAmount: Number(userStakes),
+        rewards: Number(userStakingRewards),
+        lastClaimTime: Date.now(), // Not available in standalone contract
+        apy: Math.min(20, Math.max(0, apy)), // Cap at 20% APY
+        isActive: Number(userStakes) > 0
       };
     } catch (error) {
       console.error('Failed to get staking info:', error);
-      return this.getMockStakingInfo();
+      throw error; // Re-throw error instead of returning mock data
     }
   }
 
   async getMinerRewards(address) {
     try {
       if (!this.contract) {
-        return 1898.10095; // Mock historical rewards
+        throw new Error('Contract not initialized');
       }
 
-      const rewards = await this.contract.getMinerRewards(address);
-      return Number(rewards);
+      // Get user staking rewards as a proxy for miner rewards
+      const userStakingRewards = await this.contract.userStakingRewards(address);
+      return Number(userStakingRewards);
     } catch (error) {
       console.error('Failed to get miner rewards:', error);
-      return 1898.10095; // Mock historical rewards
+      throw error; // Re-throw error instead of returning mock data
     }
   }
 
@@ -193,14 +188,14 @@ class ContractService {
   async calculateReward(difficulty, quantumLevel, computationalComplexity) {
     try {
       if (!this.contract) {
-        return this.calculateMockReward(difficulty, quantumLevel, computationalComplexity);
+        throw new Error('Contract not initialized');
       }
 
       const reward = await this.contract.calculateReward(difficulty, quantumLevel, computationalComplexity);
       return Number(reward);
     } catch (error) {
       console.error('Failed to calculate reward:', error);
-      return this.calculateMockReward(difficulty, quantumLevel, computationalComplexity);
+      throw error; // Re-throw error instead of returning mock data
     }
   }
 
@@ -240,7 +235,542 @@ class ContractService {
     }
   }
 
-  // Mock data methods for when contract is not available
+  // ============ NEW MINING FUNCTIONS ============
+
+  /**
+   * Start a new PoW mining session with automatic PoS conversion
+   */
+  async startPoWMiningSession(workType, difficulty, userAddress) {
+    try {
+      if (!this.contract) {
+        throw new Error('Contract not initialized');
+      }
+
+      console.log(`🚀 Starting PoW mining session: workType=${workType}, difficulty=${difficulty}, user=${userAddress}`);
+      
+      const tx = await this.contract.startMiningSession(workType, difficulty);
+      const receipt = await tx.wait();
+      
+      // Parse the MiningSessionStarted event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = this.contract.interface.parseLog(log);
+          return parsed.name === 'MiningSessionStarted';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsed = this.contract.interface.parseLog(event);
+        const sessionId = parsed.args.sessionId;
+        console.log(`✅ PoW mining session started: sessionId=${sessionId}`);
+        return { success: true, sessionId: sessionId.toString() };
+      }
+      
+      return { success: true, sessionId: 'unknown' };
+    } catch (error) {
+      console.error('❌ Failed to start PoW mining session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit a PoW result and automatically convert to PoS validation
+   */
+  async submitPoWResult(sessionId, nonce, hash, complexity, significance, userAddress) {
+    try {
+      if (!this.contract) {
+        throw new Error('Contract not initialized');
+      }
+
+      console.log(`⛏️ Submitting PoW result: sessionId=${sessionId}, nonce=${nonce}, complexity=${complexity}`);
+      
+      const tx = await this.contract.submitPoWResult(sessionId, nonce, hash, complexity, significance);
+      const receipt = await tx.wait();
+      
+      // Parse the events
+      const events = receipt.logs.map(log => {
+        try {
+          return this.contract.interface.parseLog(log);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      
+      const miningCompleted = events.find(e => e.name === 'MiningSessionCompleted');
+      const powSubmitted = events.find(e => e.name === 'PoWResultSubmitted');
+      const autoValidation = events.find(e => e.name === 'AutoValidationRequested');
+      const discoverySubmitted = events.find(e => e.name === 'DiscoverySubmitted');
+      
+      console.log(`✅ PoW result submitted successfully`);
+      console.log(`📊 Events: MiningCompleted=${!!miningCompleted}, PoWSubmitted=${!!powSubmitted}, AutoValidation=${!!autoValidation}, DiscoverySubmitted=${!!discoverySubmitted}`);
+      
+      return {
+        success: true,
+        resultId: powSubmitted ? powSubmitted.args.resultId.toString() : 'unknown',
+        discoveryId: discoverySubmitted ? discoverySubmitted.args.discoveryId.toString() : 'unknown',
+        events: {
+          miningCompleted: !!miningCompleted,
+          powSubmitted: !!powSubmitted,
+          autoValidation: !!autoValidation,
+          discoverySubmitted: !!discoverySubmitted
+        }
+      };
+    } catch (error) {
+      console.error('❌ Failed to submit PoW result:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get mining session details
+   */
+  async getMiningSession(sessionId) {
+    try {
+      if (!this.contract) {
+        return this.getMockMiningSession(sessionId);
+      }
+
+      const session = await this.contract.getMiningSession(sessionId);
+      
+      return {
+        targetHash: session.targetHash.toString(),
+        startTime: session.startTime.toString(),
+        endTime: session.endTime.toString(),
+        nonce: session.nonce.toString(),
+        difficulty: session.difficulty.toString(),
+        workType: session.workType.toString(),
+        miner: session.miner,
+        isCompleted: session.isCompleted,
+        autoValidationRequested: session.autoValidationRequested
+      };
+    } catch (error) {
+      console.error('❌ Failed to get mining session:', error);
+      return this.getMockMiningSession(sessionId);
+    }
+  }
+
+  /**
+   * Get PoW result details
+   */
+  async getPoWResult(resultId) {
+    try {
+      if (!this.contract) {
+        return this.getMockPoWResult(resultId);
+      }
+
+      const result = await this.contract.getPoWResult(resultId);
+      
+      return {
+        hash: result.hash.toString(),
+        timestamp: result.timestamp.toString(),
+        sessionId: result.sessionId.toString(),
+        complexity: result.complexity.toString(),
+        significance: result.significance.toString(),
+        miner: result.miner,
+        isValid: result.isValid
+      };
+    } catch (error) {
+      console.error('❌ Failed to get PoW result:', error);
+      return this.getMockPoWResult(resultId);
+    }
+  }
+
+  /**
+   * Get comprehensive mining statistics including PoW-to-PoS conversion
+   */
+  async getMiningStats() {
+    try {
+      if (!this.contract) {
+        throw new Error('Contract not initialized');
+      }
+
+      const stats = await this.contract.getMiningStats();
+      
+      return {
+        totalSessions: stats.totalSessions.toString(),
+        completedSessions: stats.completedSessions.toString(),
+        totalPoWResults: stats.totalPoWResults.toString(),
+        autoValidationRequests: stats.autoValidationRequests.toString(),
+        powToPosConversionRate: stats.completedSessions > 0 ? 
+          (stats.autoValidationRequests * 100 / stats.completedSessions).toFixed(2) + '%' : '0%'
+      };
+    } catch (error) {
+      console.error('❌ Failed to get mining stats:', error);
+      throw error; // Re-throw error instead of returning mock data
+    }
+  }
+
+  // ============ STAKING POOL FUNCTIONS ============
+
+  /**
+   * Stake tokens to contribute to validator reward pool
+   */
+  async stakeTokens(amount, userAddress) {
+    try {
+      if (!this.contract) {
+        throw new Error('Contract not initialized');
+      }
+
+      console.log(`🔒 Staking tokens: amount=${amount}, user=${userAddress}`);
+      
+      const tx = await this.contract.stake(amount);
+      const receipt = await tx.wait();
+      
+      // Parse the TokensStaked event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = this.contract.interface.parseLog(log);
+          return parsed.name === 'TokensStaked';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsed = this.contract.interface.parseLog(event);
+        console.log(`✅ Tokens staked successfully: ${parsed.args.amount.toString()}`);
+      }
+      
+      return { success: true, amount: amount.toString() };
+    } catch (error) {
+      console.error('❌ Failed to stake tokens:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unstake tokens from the staking pool
+   */
+  async unstakeTokens(amount, userAddress) {
+    try {
+      if (!this.contract) {
+        throw new Error('Contract not initialized');
+      }
+
+      console.log(`🔓 Unstaking tokens: amount=${amount}, user=${userAddress}`);
+      
+      const tx = await this.contract.unstake(amount);
+      const receipt = await tx.wait();
+      
+      // Parse the TokensUnstaked event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = this.contract.interface.parseLog(log);
+          return parsed.name === 'TokensUnstaked';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsed = this.contract.interface.parseLog(event);
+        console.log(`✅ Tokens unstaked successfully: ${parsed.args.amount.toString()}`);
+      }
+      
+      return { success: true, amount: amount.toString() };
+    } catch (error) {
+      console.error('❌ Failed to unstake tokens:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Claim staking rewards
+   */
+  async claimStakingRewards(userAddress) {
+    try {
+      if (!this.contract) {
+        throw new Error('Contract not initialized');
+      }
+
+      console.log(`💰 Claiming staking rewards: user=${userAddress}`);
+      
+      const tx = await this.contract.claimStakingRewards();
+      const receipt = await tx.wait();
+      
+      // Parse the StakingRewardsClaimed event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = this.contract.interface.parseLog(log);
+          return parsed.name === 'StakingRewardsClaimed';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsed = this.contract.interface.parseLog(event);
+        console.log(`✅ Staking rewards claimed: ${parsed.args.amount.toString()}`);
+        return { success: true, rewards: parsed.args.amount.toString() };
+      }
+      
+      return { success: true, rewards: '0' };
+    } catch (error) {
+      console.error('❌ Failed to claim staking rewards:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get staking pool information
+   */
+  async getStakingPoolInfo() {
+    try {
+      if (!this.contract) {
+        return this.getMockStakingPoolInfo();
+      }
+
+      const [totalStaked, stakingPoolBalance, validatorRewardPool, state] = await Promise.all([
+        this.contract.totalStaked(),
+        this.contract.stakingPoolBalance(),
+        this.contract.validatorRewardPool(),
+        this.contract.state()
+      ]);
+      
+      return {
+        totalStaked: totalStaked.toString(),
+        stakingPoolBalance: stakingPoolBalance.toString(),
+        validatorRewardPool: validatorRewardPool.toString(),
+        totalValidators: state.totalValidators.toString(),
+        totalStakingRewards: '0' // Not tracked separately in standalone contract
+      };
+    } catch (error) {
+      console.error('❌ Failed to get staking pool info:', error);
+      return this.getMockStakingPoolInfo();
+    }
+  }
+
+  /**
+   * Get validator reward information
+   */
+  async getValidatorRewardInfo() {
+    try {
+      if (!this.contract) {
+        return this.getMockValidatorRewardInfo();
+      }
+
+      const validatorRewardPool = await this.contract.validatorRewardPool();
+      
+      return {
+        availableRewards: validatorRewardPool.toString(),
+        totalValidatorRewards: validatorRewardPool.toString(),
+        pendingValidationFees: '0' // Not tracked separately in standalone contract
+      };
+    } catch (error) {
+      console.error('❌ Failed to get validator reward info:', error);
+      return this.getMockValidatorRewardInfo();
+    }
+  }
+
+  /**
+   * Get user staking information
+   */
+  async getUserStakingInfo(userAddress) {
+    try {
+      if (!this.contract) {
+        return this.getMockUserStakingInfo(userAddress);
+      }
+
+      const [userStakes, userStakingRewards] = await Promise.all([
+        this.contract.userStakes(userAddress),
+        this.contract.userStakingRewards(userAddress)
+      ]);
+      
+      return {
+        stakedAmount: userStakes.toString(),
+        pendingRewards: userStakingRewards.toString(),
+        totalRewards: userStakingRewards.toString()
+      };
+    } catch (error) {
+      console.error('❌ Failed to get user staking info:', error);
+      return this.getMockUserStakingInfo(userAddress);
+    }
+  }
+
+  /**
+   * Get initial validators information
+   */
+  async getInitialValidatorsInfo() {
+    try {
+      if (!this.contract) {
+        return this.getMockInitialValidatorsInfo();
+      }
+
+      // Get state info to get total validators
+      const state = await this.contract.state();
+      const totalValidators = Number(state.totalValidators);
+      
+      // For standalone contract, we can't get individual validator info easily
+      // Return basic info based on state
+      const validators = [];
+      for (let i = 0; i < totalValidators; i++) {
+        validators.push({
+          address: `0x${i.toString().padStart(40, '0')}`, // Placeholder addresses
+          stakedAmount: '1000000000000000000000000', // 1M tokens default
+          reputation: '100',
+          isActive: true
+        });
+      }
+      
+      return {
+        validators,
+        totalValidators: totalValidators,
+        totalStaked: (totalValidators * 1000000000000000000000000).toString(),
+        systemInfo: {
+          powOnlyMinting: true,
+          description: "New tokens are ONLY minted from PoW activities",
+          validatorRewardSource: "staking_pool",
+          initialValidators: totalValidators
+        }
+      };
+    } catch (error) {
+      console.error('❌ Failed to get initial validators info:', error);
+      return this.getMockInitialValidatorsInfo();
+    }
+  }
+
+  /**
+   * Get PoW-only minting statistics
+   */
+  async getPoWMintingStats() {
+    try {
+      if (!this.contract) {
+        return this.getMockPoWMintingStats();
+      }
+
+      // Get system info to show PoW-only minting
+      const systemInfo = await this.contract.state();
+      
+      return {
+        totalSupply: systemInfo.totalSupply ? systemInfo.totalSupply.toString() : '0',
+        totalBurned: systemInfo.totalBurned ? systemInfo.totalBurned.toString() : '0',
+        totalResearchValue: systemInfo.totalResearchValue ? systemInfo.totalResearchValue.toString() : '0',
+        totalValidators: systemInfo.totalValidators ? systemInfo.totalValidators.toString() : '0',
+        totalDiscoveries: systemInfo.nextDiscoveryId ? systemInfo.nextDiscoveryId.toString() : '0',
+        powOnlyMinting: true,
+        mintingSources: {
+          powMining: "ONLY source of new token minting",
+          validatorRewards: "from staking pool (no minting)",
+          stakingRewards: "from staking pool (no minting)",
+          emission: "DISABLED - no emission minting"
+        },
+        validatorSystem: {
+          initialValidators: 5,
+          rewardSource: "staking_pool",
+          stakingPoolContribution: "10% of all staked tokens"
+        }
+      };
+    } catch (error) {
+      console.error('❌ Failed to get PoW minting stats:', error);
+      return this.getMockPoWMintingStats();
+    }
+  }
+
+  /**
+   * Get discovery reward information
+   */
+  async getDiscoveryRewardInfo() {
+    try {
+      if (!this.contract) {
+        return this.getMockDiscoveryRewardInfo();
+      }
+
+      // Get state info to get discovery count
+      const state = await this.contract.state();
+      const totalDiscoveries = Number(state.nextDiscoveryId);
+      
+      return {
+        totalPoWDiscoveries: totalDiscoveries.toString(),
+        totalManualDiscoveries: '0', // Not tracked separately in standalone contract
+        totalPoWRewards: '0', // Not tracked separately in standalone contract
+        totalManualRewards: '0', // Not tracked separately in standalone contract
+        pendingManualRewards: '0', // Not tracked separately in standalone contract
+        manualRewardsEnabled: true,
+        rewardSystem: {
+          powRewards: "New tokens minted for PoW discoveries",
+          manualRewards: "Existing tokens from staking pool for validated manual discoveries",
+          rewardRatio: "Manual discoveries get 50% of PoW rewards (using existing tokens)",
+          validationRequired: "Manual discoveries must pass PoS validation to receive rewards"
+        }
+      };
+    } catch (error) {
+      console.error('❌ Failed to get discovery reward info:', error);
+      return this.getMockDiscoveryRewardInfo();
+    }
+  }
+
+  /**
+   * Calculate potential manual discovery reward
+   */
+  async calculateManualDiscoveryReward(workType, complexity, significance, researchValue, isCollaborative) {
+    try {
+      if (!this.contract) {
+        return this.getMockManualDiscoveryReward(workType, complexity, significance, researchValue, isCollaborative);
+      }
+
+      // This would require calling the contract's _calcManualDiscoveryReward function
+      // For now, we'll calculate it client-side based on the same formula
+      const baseRewards = {
+        0: 1000, // Riemann
+        1: 750,  // Goldbach
+        2: 700,  // Birch-Swinnerton
+        3: 500,  // Prime Pattern
+        4: 650,  // Twin Primes
+        5: 600,  // Collatz
+        6: 720,  // Perfect Numbers
+        7: 1000, // Mersenne
+        8: 450,  // Fibonacci
+        9: 400,  // Pascal
+        10: 760, // Differential
+        11: 640, // Number Theory
+        12: 900, // Yang-Mills
+        13: 850, // Navier-Stokes
+        14: 550, // ECC
+        15: 800, // Lattice
+        16: 680, // Crypto Hash
+        17: 950, // Poincare
+        18: 920, // Algebraic Topology
+        19: 560, // Euclidean
+        20: 1100, // Quantum
+        21: 840, // ML
+        22: 600, // Blockchain
+        23: 560, // Distributed
+        24: 760  // Optimization
+      };
+
+      const baseReward = baseRewards[workType] || 500;
+      const complexityMultiplier = complexity * 500;
+      const significanceMultiplier = significance * 250;
+      const researchMultiplier = researchValue / 2000;
+      
+      let reward = baseReward * complexityMultiplier * significanceMultiplier * researchMultiplier / 1000000;
+      
+      if (isCollaborative) {
+        reward = reward * 1.2; // 20% bonus
+      }
+      
+      // Manual discoveries get 50% of PoW rewards
+      reward = reward / 2;
+      
+      return {
+        potentialReward: Math.floor(reward).toString(),
+        baseReward: baseReward.toString(),
+        complexityMultiplier: complexityMultiplier.toString(),
+        significanceMultiplier: significanceMultiplier.toString(),
+        researchMultiplier: researchMultiplier.toString(),
+        collaborativeBonus: isCollaborative ? "20%" : "0%",
+        finalMultiplier: "50% of PoW reward (using existing tokens)"
+      };
+    } catch (error) {
+      console.error('❌ Failed to calculate manual discovery reward:', error);
+      return this.getMockManualDiscoveryReward(workType, complexity, significance, researchValue, isCollaborative);
+    }
+  }
+
+  // ============ MOCK FUNCTIONS FOR FALLBACK ============
+
   getMockNetworkStats() {
     return {
       totalDiscoveries: 42,
@@ -294,17 +824,17 @@ class ContractService {
       }
 
       // Listen for new discoveries
-      this.contract.on('DiscoverySubmitted', async (discoveryId, miner, workType, difficulty, event) => {
+      this.contract.on('DiscoverySubmitted', async (id, researcher, workType, value, event) => {
         console.log('🎯 New discovery submitted:', {
-          discoveryId: discoveryId.toString(),
-          miner,
+          discoveryId: id.toString(),
+          researcher,
           workType: workType.toString(),
-          difficulty: difficulty.toString(),
+          value: value.toString(),
           txHash: event.transactionHash
         });
 
         // Update database with new discovery
-        await this.updateDiscoveryInDatabase(discoveryId, miner, workType, difficulty, 0, 0, event.transactionHash);
+        await this.updateDiscoveryInDatabase(id, researcher, workType, value, 0, 0, event.transactionHash);
       });
 
       // Listen for mining session starts
@@ -341,7 +871,7 @@ class ContractService {
   }
 
   // Update discovery in database
-  async updateDiscoveryInDatabase(discoveryId, miner, workType, difficulty, reward, computationalComplexity, txHash) {
+  async updateDiscoveryInDatabase(discoveryId, researcher, workType, value, reward, computationalComplexity, txHash) {
     try {
       const { query } = require('../database/connection');
       
@@ -363,8 +893,8 @@ class ContractService {
       const workTypeName = workTypeNames[Number(workType)] || 'UNKNOWN';
       
       await query(`
-        INSERT INTO discoveries (id, miner_address, work_type, difficulty, reward, computational_complexity, tx_hash, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        INSERT INTO discoveries (id, miner_address, work_type, difficulty, reward, computational_complexity, tx_hash, research_value, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
         miner_address = VALUES(miner_address),
         work_type = VALUES(work_type),
@@ -372,15 +902,17 @@ class ContractService {
         reward = VALUES(reward),
         computational_complexity = VALUES(computational_complexity),
         tx_hash = VALUES(tx_hash),
+        research_value = VALUES(research_value),
         updated_at = NOW()
       `, [
         discoveryId.toString(),
-        miner,
+        researcher,
         workTypeName,
-        difficulty.toString(),
+        '0', // difficulty not in event
         reward.toString(),
         computationalComplexity.toString(),
-        txHash
+        txHash,
+        value.toString()
       ]);
 
       console.log(`✅ Discovery ${discoveryId} updated in database`);
@@ -476,6 +1008,176 @@ class ContractService {
       console.error('Contract service health check failed:', error);
       return { status: 'error', message: error.message };
     }
+  }
+
+  // ============ MOCK STAKING FUNCTIONS ============
+
+  getMockStakingPoolInfo() {
+    return {
+      totalStaked: '1000000000000000000000000', // 1M tokens
+      stakingPoolBalance: '1000000000000000000000000',
+      validatorRewardPool: '100000000000000000000000', // 100K tokens
+      totalValidators: '1',
+      totalStakingRewards: '50000000000000000000000' // 50K tokens
+    };
+  }
+
+  getMockValidatorRewardInfo() {
+    return {
+      availableRewards: '100000000000000000000000',
+      totalValidatorRewards: '50000000000000000000000',
+      pendingValidationFees: '10000000000000000000000'
+    };
+  }
+
+  getMockUserStakingInfo(userAddress) {
+    return {
+      stakedAmount: '100000000000000000000000', // 100K tokens
+      pendingRewards: '5000000000000000000000', // 5K tokens
+      totalRewards: '5000000000000000000000'
+    };
+  }
+
+  // ============ MOCK FUNCTIONS FOR NEW FEATURES ============
+
+  getMockInitialValidatorsInfo() {
+    return {
+      validators: [
+        {
+          address: '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
+          stakedAmount: '1000000000000000000000000', // 1M tokens
+          reputation: '100',
+          isActive: true
+        },
+        {
+          address: '0x1234567890123456789012345678901234567890',
+          stakedAmount: '500000000000000000000000', // 500K tokens
+          reputation: '100',
+          isActive: true
+        },
+        {
+          address: '0x2345678901234567890123456789012345678901',
+          stakedAmount: '500000000000000000000000', // 500K tokens
+          reputation: '100',
+          isActive: true
+        },
+        {
+          address: '0x3456789012345678901234567890123456789012',
+          stakedAmount: '300000000000000000000000', // 300K tokens
+          reputation: '100',
+          isActive: true
+        },
+        {
+          address: '0x4567890123456789012345678901234567890123',
+          stakedAmount: '200000000000000000000000', // 200K tokens
+          reputation: '100',
+          isActive: true
+        }
+      ],
+      totalValidators: 5,
+      totalStaked: '2500000000000000000000000', // 2.5M tokens
+      systemInfo: {
+        powOnlyMinting: true,
+        description: "New tokens are ONLY minted from PoW activities",
+        validatorRewardSource: "staking_pool",
+        initialValidators: 5
+      }
+    };
+  }
+
+  getMockPoWMintingStats() {
+    return {
+      totalSupply: '1000000000000000000000000000', // 1B tokens
+      totalBurned: '7347000000000000000000', // 7.347M burned
+      totalResearchValue: '2882361000000000000000000', // 2.88B research value
+      totalValidators: '5',
+      totalDiscoveries: '136',
+      powOnlyMinting: true,
+      mintingSources: {
+        powMining: "ONLY source of new token minting",
+        validatorRewards: "from staking pool (no minting)",
+        stakingRewards: "from staking pool (no minting)",
+        emission: "DISABLED - no emission minting"
+      },
+      validatorSystem: {
+        initialValidators: 5,
+        rewardSource: "staking_pool",
+        stakingPoolContribution: "10% of all staked tokens"
+      }
+    };
+  }
+
+  // ============ MOCK FUNCTIONS FOR DISCOVERY REWARDS ============
+
+  getMockDiscoveryRewardInfo() {
+    return {
+      totalPoWDiscoveries: '136',
+      totalManualDiscoveries: '25',
+      totalPoWRewards: '5000000000000000000000000', // 5M tokens
+      totalManualRewards: '250000000000000000000000', // 250K tokens
+      pendingManualRewards: '50000000000000000000000', // 50K tokens
+      manualRewardsEnabled: true,
+      rewardSystem: {
+        powRewards: "New tokens minted for PoW discoveries",
+        manualRewards: "Existing tokens from staking pool for validated manual discoveries",
+        rewardRatio: "Manual discoveries get 50% of PoW rewards (using existing tokens)",
+        validationRequired: "Manual discoveries must pass PoS validation to receive rewards"
+      }
+    };
+  }
+
+  getMockManualDiscoveryReward(workType, complexity, significance, researchValue, isCollaborative) {
+    const baseRewards = {
+      0: 1000, // Riemann
+      1: 750,  // Goldbach
+      2: 700,  // Birch-Swinnerton
+      3: 500,  // Prime Pattern
+      4: 650,  // Twin Primes
+      5: 600,  // Collatz
+      6: 720,  // Perfect Numbers
+      7: 1000, // Mersenne
+      8: 450,  // Fibonacci
+      9: 400,  // Pascal
+      10: 760, // Differential
+      11: 640, // Number Theory
+      12: 900, // Yang-Mills
+      13: 850, // Navier-Stokes
+      14: 550, // ECC
+      15: 800, // Lattice
+      16: 680, // Crypto Hash
+      17: 950, // Poincare
+      18: 920, // Algebraic Topology
+      19: 560, // Euclidean
+      20: 1100, // Quantum
+      21: 840, // ML
+      22: 600, // Blockchain
+      23: 560, // Distributed
+      24: 760  // Optimization
+    };
+
+    const baseReward = baseRewards[workType] || 500;
+    const complexityMultiplier = complexity * 500;
+    const significanceMultiplier = significance * 250;
+    const researchMultiplier = researchValue / 2000;
+    
+    let reward = baseReward * complexityMultiplier * significanceMultiplier * researchMultiplier / 1000000;
+    
+    if (isCollaborative) {
+      reward = reward * 1.2; // 20% bonus
+    }
+    
+    // Manual discoveries get 50% of PoW rewards
+    reward = reward / 2;
+    
+    return {
+      potentialReward: Math.floor(reward).toString(),
+      baseReward: baseReward.toString(),
+      complexityMultiplier: complexityMultiplier.toString(),
+      significanceMultiplier: significanceMultiplier.toString(),
+      researchMultiplier: researchMultiplier.toString(),
+      collaborativeBonus: isCollaborative ? "20%" : "0%",
+      finalMultiplier: "50% of PoW reward (using existing tokens)"
+    };
   }
 }
 
